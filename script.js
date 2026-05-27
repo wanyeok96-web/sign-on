@@ -922,12 +922,12 @@
 
       document.getElementById("adminEventForm")?.addEventListener("submit", AdminApp.saveEvent);
       document.getElementById("btnAdminEventReset")?.addEventListener("click", AdminApp.resetEventForm);
-      document.getElementById("adminEventTargetType")?.addEventListener("change", AdminApp.onTargetTypeChange);
+      AdminApp.bindDeptPicker("adminEventDeptList", "adminEventDeptSelectAll");
 
       document.getElementById("adminEventModalForm")?.addEventListener("submit", AdminApp.saveEventModal);
       document.getElementById("btnEventModalClose")?.addEventListener("click", AdminApp.closeEventModal);
       document.getElementById("btnEventModalDelete")?.addEventListener("click", AdminApp.deleteEventModal);
-      document.getElementById("modalEventTargetType")?.addEventListener("change", AdminApp.onModalTargetTypeChange);
+      AdminApp.bindDeptPicker("modalEventDeptList", "modalEventDeptSelectAll");
       document.getElementById("eventDetailModal")?.addEventListener("click", (e) => {
         if (e.target.id === "eventDetailModal") AdminApp.closeEventModal();
       });
@@ -1037,6 +1037,7 @@
     async refreshAll() {
       await AdminApp.loadAdminEvents();
       await AdminApp.loadStaffTable();
+      AdminApp.renderDeptPicker("adminEventDeptList", "adminEventDeptSelectAll", [], "all");
       AdminApp.fillEventSelects();
     },
 
@@ -1052,19 +1053,131 @@
       if (tab === "status") AdminApp.loadStatus();
     },
 
-    onTargetTypeChange() {
-      const type = document.getElementById("adminEventTargetType").value;
-      const field = document.getElementById("adminTargetDataField");
-      const hint = document.getElementById("adminTargetHint");
-      if (type === "all") {
-        field.hidden = true;
+    getStaffDepartments() {
+      const depts = new Set();
+      (AdminApp.staffList || []).forEach((s) => {
+        const d = getStaffDepartmentKey(s);
+        if (d) depts.add(d);
+      });
+      return Array.from(depts).sort((a, b) => {
+        const da = getDepartmentRank(a);
+        const db = getDepartmentRank(b);
+        return da !== db ? da - db : a.localeCompare(b, "ko");
+      });
+    },
+
+    renderDeptPicker(listElId, selectAllId, selectedDepts, targetType) {
+      const listEl = document.getElementById(listElId);
+      const selectAllEl = document.getElementById(selectAllId);
+      if (!listEl) return;
+
+      const depts = AdminApp.getStaffDepartments();
+      listEl.innerHTML = "";
+
+      if (!depts.length) {
+        listEl.innerHTML =
+          '<p class="dept-picker__empty muted">구성원 명단에 등록된 부서가 없습니다. 구성원 관리에서 명단을 등록해 주세요.</p>';
+        if (selectAllEl) {
+          selectAllEl.checked = false;
+          selectAllEl.disabled = true;
+        }
         return;
       }
-      field.hidden = false;
-      hint.textContent =
-        type === "departments"
-          ? "부서명을 쉼표(,)로 구분해 입력 (예: 교무, 학생, 행정)"
-          : "staffId를 쉼표(,)로 구분해 입력";
+
+      if (selectAllEl) selectAllEl.disabled = false;
+
+      let selectedSet;
+      if (targetType === "all") {
+        selectedSet = new Set(depts);
+      } else if (targetType === "departments") {
+        selectedSet = new Set((selectedDepts || []).map(String));
+      } else {
+        selectedSet = new Set();
+      }
+
+      depts.forEach((dept) => {
+        const label = document.createElement("label");
+        label.className = "dept-picker__item";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "dept-picker__checkbox";
+        cb.value = dept;
+        cb.checked = selectedSet.has(dept);
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(dept));
+        listEl.appendChild(label);
+      });
+
+      if (selectAllEl) {
+        const boxes = listEl.querySelectorAll(".dept-picker__checkbox");
+        selectAllEl.checked = boxes.length > 0 && Array.from(boxes).every((cb) => cb.checked);
+      }
+    },
+
+    bindDeptPicker(listElId, selectAllId) {
+      const listEl = document.getElementById(listElId);
+      const selectAllEl = document.getElementById(selectAllId);
+      if (!listEl || listEl.dataset.deptBound === "1") return;
+      listEl.dataset.deptBound = "1";
+
+      selectAllEl?.addEventListener("change", () => {
+        const boxes = listEl.querySelectorAll(".dept-picker__checkbox");
+        boxes.forEach((cb) => {
+          cb.checked = selectAllEl.checked;
+        });
+      });
+
+      listEl.addEventListener("change", (e) => {
+        if (!e.target.classList.contains("dept-picker__checkbox")) return;
+        const boxes = listEl.querySelectorAll(".dept-picker__checkbox");
+        if (selectAllEl) {
+          selectAllEl.checked = Array.from(boxes).every((cb) => cb.checked);
+        }
+      });
+    },
+
+    getTargetFromDeptPicker(listElId) {
+      const listEl = document.getElementById(listElId);
+      const allDepts = AdminApp.getStaffDepartments();
+      if (!allDepts.length) {
+        return {
+          ok: false,
+          message: "구성원 명단에 부서가 없습니다. 구성원 관리에서 명단을 등록해 주세요.",
+        };
+      }
+      const checked = Array.from(listEl.querySelectorAll(".dept-picker__checkbox:checked")).map(
+        (cb) => cb.value
+      );
+      if (!checked.length) {
+        return { ok: false, message: "부서를 하나 이상 선택해 주세요." };
+      }
+      if (checked.length >= allDepts.length) {
+        return { ok: true, targetType: "all", targetData: "" };
+      }
+      return { ok: true, targetType: "departments", targetData: checked.join(",") };
+    },
+
+    refreshCreateDeptPicker() {
+      const listEl = document.getElementById("adminEventDeptList");
+      if (!listEl) return;
+      const current = AdminApp.getTargetFromDeptPicker("adminEventDeptList");
+      if (!current.ok) {
+        AdminApp.renderDeptPicker("adminEventDeptList", "adminEventDeptSelectAll", [], "all");
+        return;
+      }
+      const selectedDepts =
+        current.targetType === "departments"
+          ? String(current.targetData)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          : [];
+      AdminApp.renderDeptPicker(
+        "adminEventDeptList",
+        "adminEventDeptSelectAll",
+        selectedDepts,
+        current.targetType
+      );
     },
 
     async loadAdminEvents() {
@@ -1110,10 +1223,30 @@
       document.getElementById("modalEventLocation").value = ev.location || "";
       document.getElementById("modalEventDesc").value = ev.description || "";
       document.getElementById("modalEventStatus").value = ev.status || "진행중";
-      document.getElementById("modalEventTargetType").value = ev.targetType || "all";
-      document.getElementById("modalEventTargetData").value = ev.targetData || "";
+
+      const targetType = ev.targetType || "all";
+      let selectedDepts = [];
+      if (targetType === "departments" && ev.targetData) {
+        selectedDepts = String(ev.targetData)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+      AdminApp.renderDeptPicker("modalEventDeptList", "modalEventDeptSelectAll", selectedDepts, targetType);
+
+      const modalHint = document.getElementById("modalDeptPickerHint");
+      if (modalHint) {
+        if (targetType === "members") {
+          modalHint.hidden = false;
+          modalHint.textContent =
+            "이 연수는 특정 구성원(staffId)으로 지정되어 있습니다. 부서를 선택해 저장하면 부서 기준 대상으로 바뀝니다.";
+        } else {
+          modalHint.hidden = true;
+          modalHint.textContent = "";
+        }
+      }
+
       UI.setMessage(document.getElementById("adminEventModalMessage"), "");
-      AdminApp.onModalTargetTypeChange();
       UI.openModal("eventDetailModal");
     },
 
@@ -1122,22 +1255,8 @@
       UI.setMessage(document.getElementById("adminEventModalMessage"), "");
     },
 
-    onModalTargetTypeChange() {
-      const type = document.getElementById("modalEventTargetType").value;
-      const field = document.getElementById("modalTargetDataField");
-      const hint = document.getElementById("modalTargetHint");
-      if (type === "all") {
-        field.hidden = true;
-        return;
-      }
-      field.hidden = false;
-      hint.textContent =
-        type === "departments"
-          ? "부서명을 쉼표(,)로 구분해 입력 (예: 교무, 학생, 행정)"
-          : "staffId를 쉼표(,)로 구분해 입력";
-    },
-
     getEventModalPayload() {
+      const target = AdminApp.getTargetFromDeptPicker("modalEventDeptList");
       return {
         eventId: document.getElementById("modalEventId").value,
         title: document.getElementById("modalEventTitle").value.trim(),
@@ -1145,8 +1264,10 @@
         location: document.getElementById("modalEventLocation").value.trim(),
         description: document.getElementById("modalEventDesc").value.trim(),
         status: document.getElementById("modalEventStatus").value,
-        targetType: document.getElementById("modalEventTargetType").value,
-        targetData: document.getElementById("modalEventTargetData").value.trim(),
+        targetOk: target.ok,
+        targetMessage: target.message,
+        targetType: target.ok ? target.targetType : "",
+        targetData: target.ok ? target.targetData : "",
       };
     },
 
@@ -1158,12 +1279,33 @@
         UI.setMessage(msgEl, "제목과 날짜는 필수입니다.", true);
         return;
       }
+      if (!payload.targetOk) {
+        UI.setMessage(msgEl, payload.targetMessage, true);
+        return;
+      }
       if (!payload.eventId) {
         UI.setMessage(msgEl, "연수 정보를 찾을 수 없습니다.", true);
         return;
       }
       try {
-        await UI.withLoading(() => Api.call("updateEvent", payload, true), "저장 중…");
+        await UI.withLoading(
+          () =>
+            Api.call(
+              "updateEvent",
+              {
+                eventId: payload.eventId,
+                title: payload.title,
+                date: payload.date,
+                location: payload.location,
+                description: payload.description,
+                status: payload.status,
+                targetType: payload.targetType,
+                targetData: payload.targetData,
+              },
+              true
+            ),
+          "저장 중…"
+        );
         UI.toastMsg("연수·회의가 저장되었습니다.");
         AdminApp.closeEventModal();
         await AdminApp.loadAdminEvents();
@@ -1200,22 +1342,27 @@
     resetEventForm() {
       document.getElementById("adminEventForm").reset();
       document.getElementById("adminEventStatus").value = "진행중";
-      document.getElementById("adminEventTargetType").value = "all";
-      AdminApp.onTargetTypeChange();
+      AdminApp.renderDeptPicker("adminEventDeptList", "adminEventDeptSelectAll", [], "all");
       UI.setMessage(document.getElementById("adminEventMessage"), "");
     },
 
     async saveEvent(e) {
       e.preventDefault();
       const msgEl = document.getElementById("adminEventMessage");
+      const target = AdminApp.getTargetFromDeptPicker("adminEventDeptList");
+      if (!target.ok) {
+        UI.setMessage(msgEl, target.message, true);
+        return;
+      }
+
       const payload = {
         title: document.getElementById("adminEventTitle").value.trim(),
         date: document.getElementById("adminEventDate").value,
         location: document.getElementById("adminEventLocation").value.trim(),
         description: document.getElementById("adminEventDesc").value.trim(),
         status: document.getElementById("adminEventStatus").value,
-        targetType: document.getElementById("adminEventTargetType").value,
-        targetData: document.getElementById("adminEventTargetData").value.trim(),
+        targetType: target.targetType,
+        targetData: target.targetData,
       };
       if (!payload.title || !payload.date) {
         UI.setMessage(msgEl, "제목과 날짜는 필수입니다.", true);
@@ -1250,6 +1397,7 @@
         }));
         AdminApp.staffDraft = AdminApp.sortStaffDraft(AdminApp.staffDraft);
         AdminApp.renderStaffTable();
+        AdminApp.refreshCreateDeptPicker();
       } catch (err) {
         UI.toastMsg(err.message, true);
       }

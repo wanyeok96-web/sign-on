@@ -249,11 +249,7 @@
             <h2>연수·회의 만들기</h2>
             <p class="muted">새 연수·회의를 등록합니다. 기존 항목은 아래 목록에서 선택해 수정·삭제할 수 있습니다.</p>
             <div class="divider"></div>
-            <form id="adminEventForm" class="admin-form">
-              <div class="field">
-                <label class="field__label" for="adminEventTitle">제목</label>
-                <div class="input-wrap"><input type="text" id="adminEventTitle" required /></div>
-              </div>
+            <form id="adminEventForm" class="admin-form admin-form--event-create">
               <div class="field-row field-row--2">
                 <div class="field">
                   <label class="field__label" for="adminEventDate">날짜</label>
@@ -265,41 +261,43 @@
                 </div>
               </div>
               <div class="field">
+                <label class="field__label" for="adminEventTitle">제목</label>
+                <div class="input-wrap"><input type="text" id="adminEventTitle" required /></div>
+              </div>
+              <div class="field">
                 <label class="field__label" for="adminEventDesc">설명</label>
                 <textarea id="adminEventDesc" rows="3"></textarea>
               </div>
-              <div class="field-row field-row--2">
-                <div class="field">
-                  <label class="field__label" for="adminEventStatus">상태</label>
-                  <div class="input-wrap">
-                    <select id="adminEventStatus">
-                      <option value="진행중">진행중</option>
-                      <option value="마감">마감</option>
-                      <option value="보관">보관</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="field">
-                  <label class="field__label" for="adminEventTargetType">대상 지정</label>
-                  <div class="input-wrap">
-                    <select id="adminEventTargetType">
-                      <option value="all">전체 교직원</option>
-                      <option value="departments">특정 부서</option>
-                      <option value="members">특정 구성원</option>
-                    </select>
-                  </div>
+              <div class="field">
+                <label class="field__label" for="adminEventStatus">상태</label>
+                <div class="input-wrap">
+                  <select id="adminEventStatus">
+                    <option value="진행중">진행중</option>
+                    <option value="마감">마감</option>
+                    <option value="보관">보관</option>
+                  </select>
                 </div>
               </div>
-              <div class="field" id="adminTargetDataField" hidden>
-                <label class="field__label" for="adminEventTargetData">대상 상세</label>
-                <p class="hint" id="adminTargetHint">부서: 쉼표 구분 (예: 교무, 학생) · 구성원: staffId 쉼표 구분</p>
-                <textarea id="adminEventTargetData" rows="2" placeholder=""></textarea>
+              <div class="field dept-picker-field">
+                <div class="dept-picker">
+                  <div class="dept-picker__head">
+                    <span class="field__label">부서</span>
+                    <label class="checkbox-row checkbox-row--compact dept-picker__select-all">
+                      <input type="checkbox" id="adminEventDeptSelectAll" checked />
+                      전체 선택
+                    </label>
+                  </div>
+                  <div class="dept-picker__list" id="adminEventDeptList" role="group" aria-label="대상 부서">
+                    <p class="dept-picker__empty muted">구성원 명단을 불러오는 중…</p>
+                  </div>
+                  <p class="hint dept-picker__hint">구성원 명단에 등록된 부서 기준입니다. 전체 선택 시 전 교직원이 대상입니다.</p>
+                </div>
               </div>
-              <div class="admin-form-actions">
-                <button type="submit" class="btn-primary btn-primary--sm">연수·회의 등록</button>
+              <div class="admin-form-actions admin-form-actions--end">
                 <button type="button" class="btn-ghost btn-ghost--sm" id="btnAdminEventReset">입력 초기화</button>
+                <button type="submit" class="btn-primary btn-primary--sm">연수·회의 등록</button>
               </div>
-              <p class="submit-message" id="adminEventMessage" role="status"></p>
+              <p class="submit-message submit-message--form-foot" id="adminEventMessage" role="status"></p>
             </form>
           </div>
           <div class="form-card">
@@ -476,12 +474,8 @@
   <div class="modal-backdrop" id="eventDetailModal" hidden role="dialog" aria-modal="true" aria-labelledby="eventDetailModalTitle">
     <div class="modal-card modal-card--wide">
       <h2 class="modal-title" id="eventDetailModalTitle">연수·회의 상세</h2>
-      <form id="adminEventModalForm" class="admin-form">
+      <form id="adminEventModalForm" class="admin-form admin-form--event-create">
         <input type="hidden" id="modalEventId" />
-        <div class="field">
-          <label class="field__label" for="modalEventTitle">제목</label>
-          <div class="input-wrap"><input type="text" id="modalEventTitle" required /></div>
-        </div>
         <div class="field-row field-row--2">
           <div class="field">
             <label class="field__label" for="modalEventDate">날짜</label>
@@ -493,42 +487,42 @@
           </div>
         </div>
         <div class="field">
+          <label class="field__label" for="modalEventTitle">제목</label>
+          <div class="input-wrap"><input type="text" id="modalEventTitle" required /></div>
+        </div>
+        <div class="field">
           <label class="field__label" for="modalEventDesc">설명</label>
           <textarea id="modalEventDesc" rows="3"></textarea>
         </div>
-        <div class="field-row field-row--2">
-          <div class="field">
-            <label class="field__label" for="modalEventStatus">상태</label>
-            <div class="input-wrap">
-              <select id="modalEventStatus">
-                <option value="진행중">진행중</option>
-                <option value="마감">마감</option>
-                <option value="보관">보관</option>
-              </select>
-            </div>
-          </div>
-          <div class="field">
-            <label class="field__label" for="modalEventTargetType">대상 지정</label>
-            <div class="input-wrap">
-              <select id="modalEventTargetType">
-                <option value="all">전체 교직원</option>
-                <option value="departments">특정 부서</option>
-                <option value="members">특정 구성원</option>
-              </select>
-            </div>
+        <div class="field">
+          <label class="field__label" for="modalEventStatus">상태</label>
+          <div class="input-wrap">
+            <select id="modalEventStatus">
+              <option value="진행중">진행중</option>
+              <option value="마감">마감</option>
+              <option value="보관">보관</option>
+            </select>
           </div>
         </div>
-        <div class="field" id="modalTargetDataField" hidden>
-          <label class="field__label" for="modalEventTargetData">대상 상세</label>
-          <p class="hint" id="modalTargetHint">부서: 쉼표 구분 (예: 교무, 학생) · 구성원: staffId 쉼표 구분</p>
-          <textarea id="modalEventTargetData" rows="2"></textarea>
+        <div class="field dept-picker-field">
+          <div class="dept-picker">
+            <div class="dept-picker__head">
+              <span class="field__label">부서</span>
+              <label class="checkbox-row checkbox-row--compact dept-picker__select-all">
+                <input type="checkbox" id="modalEventDeptSelectAll" />
+                전체 선택
+              </label>
+            </div>
+            <div class="dept-picker__list" id="modalEventDeptList" role="group" aria-label="대상 부서"></div>
+            <p class="hint dept-picker__hint" id="modalDeptPickerHint" hidden></p>
+          </div>
         </div>
-        <p class="submit-message" id="adminEventModalMessage" role="status"></p>
-        <div class="modal-actions modal-actions--row modal-actions--event">
+        <div class="modal-actions modal-actions--row modal-actions--event modal-actions--end">
           <button type="button" class="btn-ghost btn-ghost--sm" id="btnEventModalClose">닫기</button>
           <button type="button" class="btn-ghost btn-ghost--sm btn-ghost--danger" id="btnEventModalDelete">삭제</button>
           <button type="submit" class="btn-primary btn-primary--sm">저장</button>
         </div>
+        <p class="submit-message submit-message--form-foot" id="adminEventModalMessage" role="status"></p>
       </form>
     </div>
   </div>
