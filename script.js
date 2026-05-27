@@ -7,13 +7,104 @@
 
   const CONFIG = window.SCHOOL_CONFIG || {};
   const STORAGE_KEY = "signon_admin_token";
+  const SCHOOL_STORAGE_KEY = "signon_school_id";
 
   /* ─────────────────────────────────────────
    * API 클라이언트
    * ───────────────────────────────────────── */
+  const AppConfig = {
+    get schools() {
+      return Array.isArray(CONFIG.schools) ? CONFIG.schools : [];
+    },
+
+    hasSchoolGate() {
+      return AppConfig.schools.length > 0;
+    },
+
+    get activeSchoolId() {
+      return sessionStorage.getItem(SCHOOL_STORAGE_KEY) || "";
+    },
+
+    setActiveSchoolId(id) {
+      if (id) sessionStorage.setItem(SCHOOL_STORAGE_KEY, id);
+      else sessionStorage.removeItem(SCHOOL_STORAGE_KEY);
+    },
+
+    getSchoolById(id) {
+      return AppConfig.schools.find((s) => String(s.id) === String(id)) || null;
+    },
+
+    getActiveSchool() {
+      // 1) session 선택
+      const fromSession = AppConfig.getSchoolById(AppConfig.activeSchoolId);
+      if (fromSession) return fromSession;
+      // 2) config 기본값
+      const fallback = AppConfig.getSchoolById(CONFIG.defaultSchoolId);
+      if (fallback) return fallback;
+      // 3) 첫 학교
+      return AppConfig.schools[0] || null;
+    },
+
+    setSchoolByPassword(password) {
+      const pw = String(password || "").trim();
+      if (!pw) return null;
+      const school = AppConfig.schools.find((s) => String(s.password || "") === pw) || null;
+      if (!school) return null;
+      AppConfig.setActiveSchoolId(school.id);
+      return school;
+    },
+
+    getBaseUrl() {
+      const shared = String(CONFIG.gasWebAppUrl || "").trim();
+      if (shared && !shared.includes("YOUR_GAS")) return shared;
+      const active = AppConfig.getActiveSchool();
+      const url = (active && active.gasWebAppUrl) || "";
+      return String(url).trim();
+    },
+
+    /** API 요청에 실을 sheetSuffix (학교 비밀번호 선택 후) */
+    getSchoolSuffixForApi() {
+      if (AppConfig.hasSchoolGate()) {
+        const school = AppConfig.getSchoolById(AppConfig.activeSchoolId);
+        if (!school || !school.sheetSuffix) {
+          throw new Error("학교 코드를 먼저 입력해 주세요.");
+        }
+        return school.sheetSuffix;
+      }
+      const school = AppConfig.getActiveSchool();
+      if (school && school.sheetSuffix) return school.sheetSuffix;
+      throw new Error("school-config.js에 학교 sheetSuffix가 필요합니다.");
+    },
+
+    /** 히어로에 표시할 학교 (비밀번호로 선택된 경우만) */
+    getSelectedSchoolForDisplay() {
+      if (AppConfig.hasSchoolGate()) {
+        if (!AppConfig.activeSchoolId) return null;
+        return AppConfig.getSchoolById(AppConfig.activeSchoolId);
+      }
+      return AppConfig.getActiveSchool();
+    },
+
+    updateHeroCurrentSchool() {
+      const wrap = document.getElementById("heroCurrentSchool");
+      const nameEl = document.getElementById("heroCurrentSchoolName");
+      if (!wrap || !nameEl) return;
+
+      const school = AppConfig.getSelectedSchoolForDisplay();
+      if (!school || !school.label) {
+        wrap.hidden = true;
+        nameEl.textContent = "";
+        return;
+      }
+
+      nameEl.textContent = `🎓 ${school.label}`;
+      wrap.hidden = false;
+    },
+  };
+
   const Api = {
     get baseUrl() {
-      const url = (CONFIG.gasWebAppUrl || "").trim();
+      const url = AppConfig.getBaseUrl();
       if (!url || url.includes("YOUR_GAS")) {
         throw new Error("school-config.js에 Apps Script 웹 앱 URL을 설정해 주세요.");
       }
@@ -38,6 +129,7 @@
       const body = {
         action,
         payload,
+        schoolSuffix: AppConfig.getSchoolSuffixForApi(),
       };
       if (requireAdmin) {
         body.adminToken = Api.getAdminToken();
@@ -214,25 +306,31 @@
     staffPool: [],
     selectedStaff: null,
     state: {
-      eventId: "",
+      selectedDate: "",
+      eventIds: [],
       department: "",
       staffId: "",
       name: "",
       position: "",
     },
 
+    STAFF_STEP_IDS: ["staffStep1", "staffStep2", "staffStep3", "staffStep4", "staffStep5"],
+
     init() {
-      const schoolEl = document.getElementById("heroSchoolName");
-      if (schoolEl && CONFIG.schoolName) schoolEl.textContent = CONFIG.schoolName;
+      // 학교명 히어로 표시는 사용하지 않음
 
       SignaturePad.init(document.getElementById("signatureCanvas"));
       document.getElementById("btnClearSignature")?.addEventListener("click", () => SignaturePad.clear());
 
-      document.getElementById("staffEventSelect")?.addEventListener("change", StaffApp.onEventChange);
+      document.getElementById("staffDateSelect")?.addEventListener("change", StaffApp.onDateChange);
+      document.getElementById("staffEventChecklist")?.addEventListener("change", StaffApp.onEventChecklistChange);
+      document.getElementById("btnStaffSelectAllEvents")?.addEventListener("click", StaffApp.toggleSelectAllEvents);
       document.getElementById("staffDeptSelect")?.addEventListener("change", StaffApp.onDeptChange);
       document.getElementById("staffNameSelect")?.addEventListener("change", StaffApp.onNameChange);
       document.getElementById("btnStaffSubmit")?.addEventListener("click", StaffApp.onSubmitClick);
-      document.getElementById("btnStaffAnother")?.addEventListener("click", StaffApp.resetFlow);
+      document.getElementById("btnStaffAnother")?.addEventListener("click", () =>
+        StaffApp.resetFlow({ keepDate: true })
+      );
 
       document.getElementById("btnConfirmCancel")?.addEventListener("click", () => UI.closeModal("confirmModal"));
       document.getElementById("btnConfirmSubmit")?.addEventListener("click", StaffApp.doSubmit);
@@ -242,62 +340,316 @@
         StaffApp.doSubmit(true);
       });
 
+      document.getElementById("btnStaffSchoolUnlock")?.addEventListener("click", StaffApp.unlockSchool);
+      document.getElementById("staffSchoolPassword")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") StaffApp.unlockSchool();
+      });
+
+      StaffApp.applySchoolGateState();
+      AppConfig.updateHeroCurrentSchool();
+    },
+
+    applySchoolGateState() {
+      const gateCard = document.getElementById("staffSchoolGate");
+      const msgEl = document.getElementById("staffSchoolMessage");
+      const dateSel = document.getElementById("staffDateSelect");
+
+      if (!AppConfig.hasSchoolGate()) {
+        if (gateCard) gateCard.hidden = true;
+        StaffApp.loadEvents();
+        return;
+      }
+
+      // 학교별 설정을 쓰는 경우: 비밀번호로 학교를 선택하기 전에는 목록을 불러오지 않음
+      if (!AppConfig.activeSchoolId) {
+        if (gateCard) gateCard.hidden = false;
+        StaffApp.setStaffStepsLocked(true);
+        UI.setMessage(msgEl, "");
+        if (dateSel) {
+          dateSel.innerHTML = '<option value="">학교 코드를 먼저 입력해 주세요</option>';
+          dateSel.disabled = true;
+        }
+        StaffApp.renderEventChecklist([]);
+        return;
+      }
+
+      if (gateCard) gateCard.hidden = true;
+      StaffApp.setStaffStepsLocked(false);
+      UI.setMessage(msgEl, "");
       StaffApp.loadEvents();
     },
 
+    setStaffStepsLocked(locked) {
+      StaffApp.STAFF_STEP_IDS.forEach((id) => {
+        const card = document.getElementById(id);
+        if (!card) return;
+        if (locked) {
+          card.hidden = true;
+          card.classList.remove("is-active");
+          card.classList.remove("is-complete");
+        } else {
+          card.hidden = false;
+        }
+      });
+
+      // 입력/버튼들도 잠금 (사용자 조작 방지)
+      const dateSel = document.getElementById("staffDateSelect");
+      const checklist = document.getElementById("staffEventChecklist");
+      const selectAllBtn = document.getElementById("btnStaffSelectAllEvents");
+      const deptSel = document.getElementById("staffDeptSelect");
+      const nameSel = document.getElementById("staffNameSelect");
+      const submitBtn = document.getElementById("btnStaffSubmit");
+      if (dateSel) dateSel.disabled = !!locked;
+      if (checklist) {
+        checklist.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.disabled = !!locked;
+        });
+      }
+      if (selectAllBtn) selectAllBtn.disabled = !!locked;
+      if (deptSel) deptSel.disabled = !!locked;
+      if (nameSel) nameSel.disabled = !!locked;
+      if (submitBtn) submitBtn.disabled = true;
+
+      const canvas = document.getElementById("signatureCanvas");
+      const clearBtn = document.getElementById("btnClearSignature");
+      if (canvas) canvas.style.pointerEvents = locked ? "none" : "";
+      if (clearBtn) clearBtn.style.pointerEvents = locked ? "none" : "";
+    },
+
+    unlockSchool() {
+      const msgEl = document.getElementById("staffSchoolMessage");
+      const pw = document.getElementById("staffSchoolPassword")?.value || "";
+      const school = AppConfig.setSchoolByPassword(pw);
+      if (!school) {
+        UI.setMessage(msgEl, "학교 코드가 올바르지 않습니다.", true);
+        return;
+      }
+      UI.setMessage(msgEl, "");
+      // 학교가 바뀌면 관리자 토큰은 무효화
+      Api.setAdminToken("");
+      StaffApp.setStaffStepsLocked(false);
+      StaffApp.resetFlow();
+      StaffApp.applySchoolGateState();
+      AppConfig.updateHeroCurrentSchool();
+    },
+
+    getEventDatesSorted() {
+      const dates = new Set();
+      StaffApp.events.forEach((ev) => {
+        const d = String(ev.date || "").trim().slice(0, 10);
+        if (d) dates.add(d);
+      });
+      return Array.from(dates).sort((a, b) => b.localeCompare(a));
+    },
+
+    getEventsForSelectedDate() {
+      const d = StaffApp.state.selectedDate;
+      if (!d) return [];
+      return StaffApp.events.filter((ev) => String(ev.date || "").trim().slice(0, 10) === d);
+    },
+
+    formatEventOptionLabel(ev) {
+      const parts = [ev.title || "연수"];
+      if (ev.location) parts.push(ev.location);
+      return parts.join(" · ");
+    },
+
     async loadEvents() {
-      const sel = document.getElementById("staffEventSelect");
+      const dateSel = document.getElementById("staffDateSelect");
+      const dateHint = document.getElementById("staffDateHint");
       try {
+        if (AppConfig.hasSchoolGate() && !AppConfig.activeSchoolId) return;
         const events = await UI.withLoading(() => Api.call("getEvents"), "연수 목록 불러오는 중…");
         StaffApp.events = events || [];
-        sel.innerHTML = '<option value="">연수·회의를 선택해 주세요</option>';
-        StaffApp.events.forEach((ev) => {
+
+        const dates = StaffApp.getEventDatesSorted();
+        dateSel.innerHTML = '<option value="">연수 일자를 선택해 주세요</option>';
+        dateSel.disabled = false;
+        dates.forEach((d) => {
           const opt = document.createElement("option");
-          opt.value = ev.eventId;
-          opt.textContent = `${ev.title} (${ev.date || ""})`;
-          opt.dataset.ev = JSON.stringify(ev);
-          sel.appendChild(opt);
+          opt.value = d;
+          opt.textContent = formatPrintDatetime(d);
+          dateSel.appendChild(opt);
         });
-        if (StaffApp.events.length === 0) {
-          sel.innerHTML = '<option value="">진행 중인 연수가 없습니다</option>';
+
+        if (dates.length === 0) {
+          dateSel.innerHTML = '<option value="">진행 중인 연수가 없습니다</option>';
+          dateSel.disabled = true;
+          if (dateHint) dateHint.textContent = "";
+        } else if (dateHint) {
+          dateHint.textContent = `총 ${dates.length}일 · 연수 ${StaffApp.events.length}건`;
         }
+
+        StaffApp.renderEventChecklist([]);
       } catch (err) {
-        sel.innerHTML = '<option value="">목록을 불러올 수 없습니다</option>';
+        dateSel.innerHTML = '<option value="">목록을 불러올 수 없습니다</option>';
+        dateSel.disabled = true;
+        StaffApp.renderEventChecklist([], "목록을 불러올 수 없습니다");
         UI.toastMsg(err.message, true);
       }
     },
 
-    onEventChange() {
-      const sel = document.getElementById("staffEventSelect");
-      const opt = sel.selectedOptions[0];
-      StaffApp.state.eventId = sel.value;
-      StaffApp.state.department = "";
-      StaffApp.state.staffId = "";
-      StaffApp.markStep(1, !!sel.value);
+    renderEventChecklist(dayEvents, emptyMessage) {
+      const list = document.getElementById("staffEventChecklist");
+      const selectAllBtn = document.getElementById("btnStaffSelectAllEvents");
+      if (!list) return;
 
-      const preview = document.getElementById("staffEventPreview");
-      if (opt?.dataset.ev) {
-        const ev = JSON.parse(opt.dataset.ev);
-        preview.hidden = false;
-        preview.innerHTML = `<strong>${escapeHtml(ev.title)}</strong><br>
-          날짜: ${escapeHtml(ev.date || "-")} · 장소: ${escapeHtml(ev.location || "-")}<br>
-          ${escapeHtml(ev.description || "")}`;
-        if (ev.status === "마감") {
-          UI.toastMsg("이 연수는 마감되어 추가 제출이 불가합니다.", true);
-        }
-      } else {
-        preview.hidden = true;
+      list.innerHTML = "";
+      if (!dayEvents || dayEvents.length === 0) {
+        const p = document.createElement("p");
+        p.className = "event-checklist__empty muted";
+        p.textContent = emptyMessage || "날짜를 먼저 선택해 주세요";
+        list.appendChild(p);
+        if (selectAllBtn) selectAllBtn.hidden = true;
+        return;
       }
 
-      StaffApp.loadStaffForEvent();
+      dayEvents.forEach((ev) => {
+        const closed = ev.status === "마감";
+        const label = document.createElement("label");
+        label.className = "event-check-item" + (closed ? " is-closed" : "");
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = String(ev.eventId);
+        if (closed) input.disabled = true;
+
+        const body = document.createElement("span");
+        body.className = "event-check-item__body";
+        const title = document.createElement("span");
+        title.className = "event-check-item__title";
+        title.textContent = ev.title || "연수";
+        const meta = document.createElement("span");
+        meta.className = "event-check-item__meta";
+        meta.textContent = ev.location || "장소 미정";
+        body.appendChild(title);
+        body.appendChild(meta);
+        if (closed) {
+          const badge = document.createElement("span");
+          badge.className = "event-check-item__badge";
+          badge.textContent = "마감";
+          body.appendChild(badge);
+        }
+
+        label.appendChild(input);
+        label.appendChild(body);
+        list.appendChild(label);
+      });
+
+      if (selectAllBtn) {
+        const openCount = dayEvents.filter((ev) => ev.status !== "마감").length;
+        selectAllBtn.hidden = openCount < 2;
+        selectAllBtn.textContent = "전체 선택";
+      }
+    },
+
+    syncSelectedEventIds() {
+      const list = document.getElementById("staffEventChecklist");
+      if (!list) {
+        StaffApp.state.eventIds = [];
+        return;
+      }
+      StaffApp.state.eventIds = Array.from(list.querySelectorAll('input[type="checkbox"]:checked')).map(
+        (cb) => cb.value
+      );
+    },
+
+    toggleSelectAllEvents() {
+      const list = document.getElementById("staffEventChecklist");
+      const btn = document.getElementById("btnStaffSelectAllEvents");
+      if (!list || !btn) return;
+      const boxes = Array.from(list.querySelectorAll('input[type="checkbox"]:not(:disabled)'));
+      if (!boxes.length) return;
+      const allChecked = boxes.every((cb) => cb.checked);
+      boxes.forEach((cb) => {
+        cb.checked = !allChecked;
+      });
+      btn.textContent = allChecked ? "전체 선택" : "전체 해제";
+      StaffApp.onEventChecklistChange();
+    },
+
+    onEventChecklistChange() {
+      StaffApp.syncSelectedEventIds();
+      const ids = StaffApp.state.eventIds;
+      StaffApp.state.department = "";
+      StaffApp.state.staffId = "";
+      StaffApp.markStep(2, ids.length > 0);
+
+      const btn = document.getElementById("btnStaffSelectAllEvents");
+      const list = document.getElementById("staffEventChecklist");
+      if (btn && list) {
+        const boxes = Array.from(list.querySelectorAll('input[type="checkbox"]:not(:disabled)'));
+        if (boxes.length >= 2) {
+          btn.textContent = boxes.every((cb) => cb.checked) ? "전체 해제" : "전체 선택";
+        }
+      }
+
+      const hint = document.getElementById("staffEventHint");
+      if (hint) {
+        if (ids.length === 0) {
+          hint.textContent = "서명할 연수·회의를 하나 이상 선택해 주세요.";
+        } else {
+          hint.textContent =
+            ids.length === 1 ? "선택 1건 · 동일 서명으로 제출됩니다" : `선택 ${ids.length}건 · 동일 서명으로 일괄 제출됩니다`;
+        }
+      }
+
+      StaffApp.loadStaffForSelectedEvents();
       StaffApp.resetDeptName();
     },
 
-    async loadStaffForEvent() {
-      if (!StaffApp.state.eventId) return;
+    onDateChange() {
+      const dateSel = document.getElementById("staffDateSelect");
+      const eventHint = document.getElementById("staffEventHint");
+
+      StaffApp.state.selectedDate = dateSel.value;
+      StaffApp.state.eventIds = [];
+      StaffApp.state.department = "";
+      StaffApp.state.staffId = "";
+      StaffApp.markStep(1, !!dateSel.value);
+      StaffApp.resetDeptName();
+
+      if (!dateSel.value) {
+        StaffApp.renderEventChecklist([]);
+        if (eventHint) eventHint.textContent = "";
+        StaffApp.markStep(2, false);
+        return;
+      }
+
+      const dayEvents = StaffApp.getEventsForSelectedDate();
+      if (dayEvents.length === 0) {
+        StaffApp.renderEventChecklist([], "해당 날짜에 연수가 없습니다");
+        if (eventHint) eventHint.textContent = "";
+      } else {
+        StaffApp.renderEventChecklist(dayEvents);
+        if (eventHint) {
+          eventHint.textContent =
+            dayEvents.length === 1
+              ? "이 날짜에 연수 1건 · 체크 후 다음 단계로"
+              : `이 날짜에 연수 ${dayEvents.length}건 · 서명할 항목을 체크하세요`;
+        }
+        const openOnly = dayEvents.filter((ev) => ev.status !== "마감");
+        if (openOnly.length === 1) {
+          const listEl = document.getElementById("staffEventChecklist");
+          const cb = listEl?.querySelector(
+            `input[type="checkbox"][value="${CSS.escape(String(openOnly[0].eventId))}"]`
+          );
+          if (cb) {
+            cb.checked = true;
+            StaffApp.onEventChecklistChange();
+            return;
+          }
+        }
+      }
+
+      StaffApp.markStep(2, false);
+    },
+
+    async loadStaffForSelectedEvents() {
+      if (!StaffApp.state.eventIds.length) return;
       try {
-        StaffApp.staffPool = await Api.call("getStaffForEvent", {
-          eventId: StaffApp.state.eventId,
+        StaffApp.staffPool = await Api.call("getStaffForEvents", {
+          eventIds: StaffApp.state.eventIds,
         });
         const depts = [...new Set(StaffApp.staffPool.map((s) => s.department))].sort();
         const deptSel = document.getElementById("staffDeptSelect");
@@ -309,7 +661,10 @@
           o.textContent = d;
           deptSel.appendChild(o);
         });
-        StaffApp.markStep(2, false);
+        StaffApp.markStep(3, false);
+        if (depts.length === 0) {
+          UI.toastMsg("선택한 연수 모두에 참여 대상으로 등록된 교직원만 서명할 수 있습니다.", true);
+        }
       } catch (err) {
         UI.toastMsg(err.message, true);
       }
@@ -323,8 +678,8 @@
       nameSel.innerHTML = '<option value="">이름을 선택해 주세요</option>';
       if (!dept) {
         nameSel.disabled = true;
-        StaffApp.markStep(2, false);
         StaffApp.markStep(3, false);
+        StaffApp.markStep(4, false);
         StaffApp.validateSubmitButton();
         return;
       }
@@ -337,8 +692,8 @@
         nameSel.appendChild(o);
       });
       nameSel.disabled = false;
-      StaffApp.markStep(2, true);
-      StaffApp.markStep(3, false);
+      StaffApp.markStep(3, true);
+      StaffApp.markStep(4, false);
       StaffApp.validateSubmitButton();
     },
 
@@ -351,10 +706,12 @@
         StaffApp.state.name = s.name;
         StaffApp.state.position = s.position || "";
         StaffApp.selectedStaff = s;
-        StaffApp.markStep(3, true);
+        StaffApp.markStep(4, true);
+        StaffApp.markStep(5, false);
       } else {
         StaffApp.state.staffId = "";
-        StaffApp.markStep(3, false);
+        StaffApp.markStep(4, false);
+        StaffApp.markStep(5, false);
       }
       StaffApp.validateSubmitButton();
     },
@@ -362,7 +719,7 @@
     resetDeptName() {
       const deptSel = document.getElementById("staffDeptSelect");
       const nameSel = document.getElementById("staffNameSelect");
-      deptSel.innerHTML = '<option value="">연수를 먼저 선택해 주세요</option>';
+      deptSel.innerHTML = '<option value="">연수를 하나 이상 선택해 주세요</option>';
       deptSel.disabled = true;
       nameSel.innerHTML = '<option value="">부서를 먼저 선택해 주세요</option>';
       nameSel.disabled = true;
@@ -384,23 +741,29 @@
 
     isStepReachable(num) {
       if (num <= 1) return true;
-      if (num === 2) return !!StaffApp.state.eventId;
-      if (num === 3) return !!StaffApp.state.department;
-      if (num === 4) return !!StaffApp.state.staffId;
+      if (num === 2) return !!StaffApp.state.selectedDate;
+      if (num === 3) return StaffApp.state.eventIds.length > 0;
+      if (num === 4) return !!StaffApp.state.department;
+      if (num === 5) return !!StaffApp.state.staffId;
       return false;
     },
 
     validateSubmitButton() {
       const btn = document.getElementById("btnStaffSubmit");
       const ok =
-        StaffApp.state.eventId &&
+        StaffApp.state.eventIds.length > 0 &&
         StaffApp.state.staffId &&
         !SignaturePad.isEmpty();
       if (btn) btn.disabled = !ok;
     },
 
+    getSelectedEvents() {
+      const idSet = new Set(StaffApp.state.eventIds.map(String));
+      return StaffApp.events.filter((e) => idSet.has(String(e.eventId)));
+    },
+
     async onSubmitClick() {
-      if (!StaffApp.state.eventId || !StaffApp.state.staffId) {
+      if (!StaffApp.state.eventIds.length || !StaffApp.state.staffId) {
         UI.toastMsg("연수, 부서, 이름을 모두 선택해 주세요.", true);
         return;
       }
@@ -409,18 +772,28 @@
         return;
       }
 
-      const ev = StaffApp.events.find((e) => e.eventId === StaffApp.state.eventId);
-      if (ev?.status === "마감") {
-        UI.toastMsg("마감된 연수에는 제출할 수 없습니다.", true);
+      const selected = StaffApp.getSelectedEvents();
+      const closed = selected.filter((ev) => ev.status === "마감");
+      if (closed.length) {
+        UI.toastMsg("마감된 연수는 제출할 수 없습니다. 선택을 확인해 주세요.", true);
         return;
       }
 
       try {
-        const check = await Api.call("checkSignature", {
-          eventId: StaffApp.state.eventId,
+        const check = await Api.call("checkSignaturesBulk", {
+          eventIds: StaffApp.state.eventIds,
           staffId: StaffApp.state.staffId,
+          department: StaffApp.state.department,
+          name: StaffApp.state.name,
         });
         if (check.exists) {
+          const owText = document.getElementById("overwriteModalText");
+          const titles = (check.existingEvents || []).map((e) => e.title).join(", ");
+          if (owText) {
+            owText.innerHTML = titles
+              ? `다음 연수에 이미 서명이 있습니다:<br><strong>${escapeHtml(titles)}</strong><br><br>수정 제출하시겠습니까? 기존 서명이 새 서명으로 바뀝니다.`
+              : "수정 제출하시겠습니까?<br />기존 서명이 새 서명으로 바뀝니다.";
+          }
           UI.openModal("overwriteModal");
           return;
         }
@@ -434,7 +807,10 @@
 
     showConfirmModal() {
       const text = document.getElementById("confirmModalText");
-      text.textContent = `${StaffApp.state.department} ${StaffApp.state.name} 선생님,\n서명을 제출하시겠습니까?`;
+      const selected = StaffApp.getSelectedEvents();
+      const titles = selected.map((e) => e.title || "연수").join("\n· ");
+      const count = selected.length;
+      text.textContent = `${StaffApp.state.department} ${StaffApp.state.name} 선생님,\n선택한 연수 ${count}건에 서명을 제출합니다.\n\n· ${titles}\n\n제출하시겠습니까?`;
       UI.openModal("confirmModal");
     },
 
@@ -444,10 +820,10 @@
       const msgEl = document.getElementById("staffSubmitMessage");
 
       try {
-        await UI.withLoading(
+        const result = await UI.withLoading(
           () =>
-            Api.call("submitSignature", {
-              eventId: StaffApp.state.eventId,
+            Api.call("submitSignaturesBulk", {
+              eventIds: StaffApp.state.eventIds,
               staffId: StaffApp.state.staffId,
               department: StaffApp.state.department,
               name: StaffApp.state.name,
@@ -459,6 +835,17 @@
         );
         document.getElementById("staffFormStack").hidden = true;
         document.getElementById("staffSuccessCard").hidden = false;
+        const detail = document.getElementById("staffSuccessDetail");
+        if (detail) {
+          const n = result?.submitted ?? StaffApp.state.eventIds.length;
+          const total = result?.total ?? StaffApp.state.eventIds.length;
+          if (n < total) {
+            detail.textContent = `${n}건 제출 완료 (${total - n}건 실패). 관리자에게 문의해 주세요.`;
+          } else {
+            detail.textContent =
+              n > 1 ? `선택한 연수 ${n}건에 서명이 저장되었습니다. 감사합니다.` : "감사합니다. 창을 닫으셔도 됩니다.";
+          }
+        }
         UI.setMessage(msgEl, "");
       } catch (err) {
         UI.setMessage(msgEl, err.message, true);
@@ -466,20 +853,46 @@
       }
     },
 
-    resetFlow() {
-      StaffApp.state = { eventId: "", department: "", staffId: "", name: "", position: "" };
+    async resetFlow(options = {}) {
+      const keepDate = options.keepDate === true;
+      const prevDate = keepDate ? StaffApp.state.selectedDate : "";
+
+      StaffApp.state = {
+        selectedDate: "",
+        eventIds: [],
+        department: "",
+        staffId: "",
+        name: "",
+        position: "",
+      };
+      const successDetail = document.getElementById("staffSuccessDetail");
+      if (successDetail) successDetail.textContent = "감사합니다. 창을 닫으셔도 됩니다.";
       SignaturePad.clear();
       document.getElementById("staffFormStack").hidden = false;
       document.getElementById("staffSuccessCard").hidden = true;
-      document.getElementById("staffEventSelect").value = "";
       StaffApp.resetDeptName();
-      StaffApp.loadEvents();
-      ["staffStep1", "staffStep2", "staffStep3", "staffStep4"].forEach((id, i) => {
+      await StaffApp.loadEvents();
+
+      const dateSel = document.getElementById("staffDateSelect");
+      if (keepDate && prevDate && dateSel) {
+        dateSel.value = prevDate;
+        StaffApp.onDateChange();
+        StaffApp.markStep(1, true);
+        StaffApp.markStep(2, false);
+      } else if (dateSel) {
+        dateSel.value = "";
+      }
+
+      StaffApp.STAFF_STEP_IDS.forEach((id, i) => {
         const card = document.getElementById(id);
-        card?.classList.toggle("is-active", i === 0);
+        const activeIndex = keepDate && prevDate ? 1 : 0;
+        card?.classList.toggle("is-active", i === activeIndex);
         card?.classList.remove("is-complete");
         card?.querySelector(".step-badge")?.classList.remove("is-complete");
       });
+      if (keepDate && prevDate) {
+        StaffApp.markStep(1, true);
+      }
       StaffApp.validateSubmitButton();
     },
   };
@@ -497,6 +910,9 @@
       document.getElementById("btnAdminLogin")?.addEventListener("click", AdminApp.login);
       document.getElementById("btnAdminLogout")?.addEventListener("click", AdminApp.logout);
       document.getElementById("adminPassword")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") AdminApp.login();
+      });
+      document.getElementById("adminSchoolPassword")?.addEventListener("keydown", (e) => {
         if (e.key === "Enter") AdminApp.login();
       });
 
@@ -549,9 +965,38 @@
       document.getElementById("btnPrintRegister")?.addEventListener("click", () => window.print());
 
       if (Api.getAdminToken()) AdminApp.showDashboard();
+      AdminApp.applySchoolGateState();
+    },
+
+    applySchoolGateState() {
+      const gate = document.getElementById("adminSchoolGate");
+      if (!gate) return;
+      if (!AppConfig.hasSchoolGate()) {
+        gate.hidden = true;
+        return;
+      }
+      gate.hidden = !!AppConfig.activeSchoolId;
     },
 
     async login() {
+      // 학교 코드(학교 선택) 확인
+      if (AppConfig.hasSchoolGate() && !AppConfig.activeSchoolId) {
+        const schoolPw = document.getElementById("adminSchoolPassword")?.value || "";
+        const school = AppConfig.setSchoolByPassword(schoolPw);
+        if (!school) {
+          UI.setMessage(
+            document.getElementById("adminLoginMessage"),
+            "학교 코드가 올바르지 않습니다.",
+            true
+          );
+          return;
+        }
+        // 학교가 선택되면 기존 토큰은 무효
+        Api.setAdminToken("");
+        AdminApp.applySchoolGateState();
+        AppConfig.updateHeroCurrentSchool();
+      }
+
       const pw = document.getElementById("adminPassword").value;
       const msgEl = document.getElementById("adminLoginMessage");
       if (!pw) {
@@ -566,6 +1011,7 @@
         Api.setAdminToken(data.token);
         UI.setMessage(msgEl, "");
         AdminApp.showDashboard();
+        AppConfig.updateHeroCurrentSchool();
       } catch (err) {
         UI.setMessage(msgEl, err.message, true);
       }
@@ -576,6 +1022,10 @@
       document.getElementById("adminLoginCard").hidden = false;
       document.getElementById("adminDashboard").hidden = true;
       document.getElementById("adminPassword").value = "";
+      const schoolPwEl = document.getElementById("adminSchoolPassword");
+      if (schoolPwEl) schoolPwEl.value = "";
+      AdminApp.applySchoolGateState();
+      AppConfig.updateHeroCurrentSchool();
     },
 
     showDashboard() {
@@ -1352,5 +1802,6 @@
     initNavigation();
     StaffApp.init();
     AdminApp.init();
+    AppConfig.updateHeroCurrentSchool();
   });
 })();

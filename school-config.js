@@ -1,16 +1,62 @@
 /**
+
  * 싸인온 Sign-On — 학교별 공개 설정
+
  * GitHub Pages에 올려도 안전: Apps Script 배포 URL만 포함합니다.
+
  * Sheet ID, 관리자 암호는 절대 여기에 두지 마세요.
+
  */
+
 window.SCHOOL_CONFIG = {
-  /** 학교 표시명 (선택) */
-  schoolName: "이솔고등학교",
 
   /**
-   * Google Apps Script 웹 앱 URL
-   * 배포 후 /exec 로 끝나는 URL을 넣으세요.
-   * 예: https://script.google.com/macros/s/xxxxx/exec
+
+   * 모든 학교가 공통으로 쓰는 GAS 웹앱 URL (/exec)
+
+   * 학교 추가 시 URL을 새로 만들 필요 없음 — schoolSuffix로 탭만 구분
+
    */
-  gasWebAppUrl: "https://script.google.com/macros/s/AKfycby_CnJAip0VABXODUTNeqEjYlPa-VioBKBl0jZGSV4Fi__3lXEjVYxspMtybWgvAiQ-/exec",
+
+  gasWebAppUrl:
+
+    "https://script.google.com/macros/s/AKfycbyTw81r-gg19Szv_YnqsEle3UJKlhmr1eVs4cWhzsfYmdq5LVTwYqwzYJYfSCTpPpGU/exec",
+
+
+
+  schools: [
+
+    {
+
+      id: "isolgo",
+
+      label: "이솔고등학교",
+
+      sheetSuffix: "이솔고",
+
+      /** 교직원·관리자 학교 선택용 코드 */
+      password: "isolgo",
+
+    },
+
+    {
+
+      id: "hagilgo",
+
+      label: "하길고등학교",
+
+      sheetSuffix: "하길고",
+
+      password: "hagilgo",
+
+    },
+
+  ],
+
+
+
+  defaultSchoolId: "isolgo",
+
 };
+
+

@@ -9,6 +9,10 @@
 </head>
 <body>
   <div class="app">
+    <p class="site-credit" aria-label="저작권">
+      © 2026 싸인온(Sign-On) <span class="site-credit__sep" aria-hidden="true">|</span> made by 경기 이솔고등학교 이왕혁
+    </p>
+
     <!-- 히어로 -->
     <header class="hero" aria-label="서비스 소개">
       <div class="hero-blob hero-blob--1" aria-hidden="true"></div>
@@ -17,9 +21,16 @@
         <span class="icon-inline" aria-hidden="true">✍️</span>
         교직원 온라인 등록부
       </p>
-      <h1 class="hero-title">싸인온 <span class="title-accent">Sign-On</span></h1>
-      <p class="hero-lede">교직원 회의·연수 온라인 등록부</p>
-      <p class="hero-school" id="heroSchoolName"></p>
+      <h1 class="hero-title">
+        <span class="hero-title__icon" aria-hidden="true">🏫</span>싸인온 <span class="title-accent">Sign-On</span><span class="hero-title__icon" aria-hidden="true">📝</span>
+      </h1>
+      <div class="hero-lede-group">
+        <p class="hero-lede">온라인에서 간편하게, 연수 등록부에 서명하세요.</p>
+        <p class="hero-lede hero-lede--sub">배움이 넘치는 연수가 되길 응원합니다!</p>
+      </div>
+      <p class="hero-current-school" id="heroCurrentSchool" hidden>
+        <span class="hero-current-school__name" id="heroCurrentSchoolName"></span>
+      </p>
     </header>
 
     <!-- 교직원 / 관리자 구분 탭 -->
@@ -41,37 +52,83 @@
     <!-- ═══ 교직원 페이지 ═══ -->
     <main class="panel layout-single" id="staffPanel" aria-label="교직원 서명">
       <div class="form-stack" id="staffFormStack">
-        <!-- STEP 1: 연수/회의 선택 -->
+        <!-- 학교 코드 -->
+        <section class="form-card form-card--solo staff-school-card" id="staffSchoolGate">
+          <p class="kicker">학교 선택</p>
+          <h2>학교 코드</h2>
+          <p class="muted">학교 코드에 따라 해당 학교의 연수 목록이 불러와집니다.</p>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffSchoolPassword">학교 코드</label>
+            <div class="input-wrap">
+              <input type="text" id="staffSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+            </div>
+          </div>
+          <div class="submit-block">
+            <button type="button" class="btn-primary" id="btnStaffSchoolUnlock">확인</button>
+            <p class="submit-message" id="staffSchoolMessage" role="status"></p>
+          </div>
+        </section>
+
+        <!-- STEP 1: 연수 일자 -->
         <section class="form-card is-active" id="staffStep1" data-step="1">
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 1</p>
-              <h2>연수·회의 선택</h2>
-              <p class="muted">진행 중인 연수·회의만 표시됩니다.</p>
+              <h2>연수 일자</h2>
+              <p class="muted">진행 중인 연수가 있는 날짜를 선택하세요.</p>
             </div>
             <span class="step-badge">1</span>
           </div>
           <div class="divider"></div>
           <div class="field">
-            <label class="field__label" for="staffEventSelect">연수·회의</label>
+            <label class="field__label" for="staffDateSelect">날짜</label>
             <div class="input-wrap">
-              <select id="staffEventSelect" aria-describedby="staffEventHint">
+              <select id="staffDateSelect" aria-describedby="staffDateHint">
                 <option value="">불러오는 중…</option>
               </select>
             </div>
-            <p class="hint" id="staffEventHint"></p>
+            <p class="hint" id="staffDateHint"></p>
           </div>
-          <div class="event-preview" id="staffEventPreview" hidden></div>
         </section>
 
-        <!-- STEP 2: 부서 -->
+        <!-- STEP 2: 연수/회의 다중 선택 -->
         <section class="form-card" id="staffStep2" data-step="2">
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 2</p>
-              <h2>부서 선택</h2>
+              <h2>연수·회의 선택</h2>
+              <p class="muted">서명할 연수·회의를 체크하세요. 여러 개를 한 번에 서명할 수 있습니다.</p>
             </div>
             <span class="step-badge">2</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <div class="event-checklist-toolbar">
+              <span class="field__label" id="staffEventChecklistLabel">연수·회의 목록</span>
+              <button type="button" class="btn-text" id="btnStaffSelectAllEvents" hidden>전체 선택</button>
+            </div>
+            <div
+              class="event-checklist"
+              id="staffEventChecklist"
+              role="group"
+              aria-labelledby="staffEventChecklistLabel"
+              aria-describedby="staffEventHint"
+            >
+              <p class="event-checklist__empty muted">날짜를 먼저 선택해 주세요</p>
+            </div>
+            <p class="hint" id="staffEventHint"></p>
+          </div>
+        </section>
+
+        <!-- STEP 3: 부서 -->
+        <section class="form-card" id="staffStep3" data-step="3">
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 3</p>
+              <h2>부서 선택</h2>
+            </div>
+            <span class="step-badge">3</span>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -84,14 +141,14 @@
           </div>
         </section>
 
-        <!-- STEP 3: 이름 -->
-        <section class="form-card" id="staffStep3" data-step="3">
+        <!-- STEP 4: 이름 -->
+        <section class="form-card" id="staffStep4" data-step="4">
           <div class="form-card__head">
             <div>
-              <p class="kicker">STEP 3</p>
+              <p class="kicker">STEP 4</p>
               <h2>이름 선택</h2>
             </div>
-            <span class="step-badge">3</span>
+            <span class="step-badge">4</span>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -104,15 +161,15 @@
           </div>
         </section>
 
-        <!-- STEP 4: 서명 -->
-        <section class="form-card" id="staffStep4" data-step="4">
+        <!-- STEP 5: 서명 -->
+        <section class="form-card" id="staffStep5" data-step="5">
           <div class="form-card__head">
             <div>
-              <p class="kicker">STEP 4</p>
+              <p class="kicker">STEP 5</p>
               <h2>자필 서명</h2>
               <p class="muted">손가락 또는 마우스로 서명해 주세요.</p>
             </div>
-            <span class="step-badge">4</span>
+            <span class="step-badge">5</span>
           </div>
           <div class="divider"></div>
           <div class="signature-pad-wrap">
@@ -140,7 +197,7 @@
           </svg>
         </div>
         <h2 class="success-title">제출이 완료되었습니다.</h2>
-        <p class="muted">감사합니다. 창을 닫으셔도 됩니다.</p>
+        <p class="muted" id="staffSuccessDetail">감사합니다. 창을 닫으셔도 됩니다.</p>
         <button type="button" class="btn-ghost" id="btnStaffAnother">다른 연수 서명하기</button>
       </section>
     </main>
@@ -153,6 +210,13 @@
         <h2>관리자 로그인</h2>
         <p class="muted">학교 지정 관리자만 접근할 수 있습니다.</p>
         <div class="divider"></div>
+        <div class="field" id="adminSchoolGate">
+          <label class="field__label" for="adminSchoolPassword">학교 코드</label>
+          <div class="input-wrap">
+            <input type="text" id="adminSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+          </div>
+          <p class="hint">학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.</p>
+        </div>
         <div class="field">
           <label class="field__label" for="adminPassword">관리자 암호</label>
           <div class="input-wrap">
@@ -522,7 +586,7 @@
   <div class="modal-backdrop" id="overwriteModal" hidden role="dialog" aria-modal="true">
     <div class="modal-card modal-card--sm">
       <h2 class="modal-title">이미 제출했습니다</h2>
-      <p class="modal-subtitle">수정 제출하시겠습니까?<br />기존 서명이 새 서명으로 바뀝니다.</p>
+      <p class="modal-subtitle" id="overwriteModalText">수정 제출하시겠습니까?<br />기존 서명이 새 서명으로 바뀝니다.</p>
       <div class="modal-actions modal-actions--row">
         <button type="button" class="btn-ghost" id="btnOverwriteCancel">취소</button>
         <button type="button" class="btn-primary btn-primary--sm" id="btnOverwriteOk">수정 제출</button>

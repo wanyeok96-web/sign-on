@@ -2,15 +2,63 @@
  * 싸인온 Sign-On — Google Apps Script 백엔드
  *
  * Script Properties (프로젝트 설정 > 스크립트 속성):
- *   SPREADSHEET_ID  — Google 스프레드시트 ID
- *   ADMIN_PASSWORD  — 관리자 암호 (프론트엔드에 노출 금지)
+ *   SPREADSHEET_ID     — Google 스프레드시트 ID (학교 공통 1개)
+ *   ADMIN_PASSWORD     — 관리자 암호 (공통, 또는 학교별로 아래 키 사용)
+ *   ADMIN_PASSWORD_이솔고 — (선택) 학교별 관리자 암호
+ *   SCHOOL_SUFFIXES    — (선택) 허용 접미사 쉼표 구분: 이솔고,하길고
+ *   SCHOOL_SUFFIX      — (선택·레거시) 요청에 schoolSuffix 없을 때만 사용
  *
- * 시트 이름: 연수목록 | 구성원명단 | 서명기록
+ * 시트 이름: 연수목록(SUFFIX) | 구성원명단(SUFFIX) | 서명기록(SUFFIX)
+ * 프론트는 매 요청마다 body.schoolSuffix 전달 (예: 이솔고, 하길고)
  */
 
-const SHEET_EVENTS = "연수목록";
-const SHEET_STAFF = "구성원명단";
-const SHEET_SIGS = "서명기록";
+const SHEET_BASE_EVENTS = "연수목록";
+const SHEET_BASE_STAFF = "구성원명단";
+const SHEET_BASE_SIGS = "서명기록";
+
+function sheetNameFor_(base, schoolSuffix) {
+  return base + "(" + schoolSuffix + ")";
+}
+
+function getSheetEvents_(schoolSuffix) {
+  return sheetNameFor_(SHEET_BASE_EVENTS, schoolSuffix);
+}
+
+function getSheetStaff_(schoolSuffix) {
+  return sheetNameFor_(SHEET_BASE_STAFF, schoolSuffix);
+}
+
+function getSheetSigs_(schoolSuffix) {
+  return sheetNameFor_(SHEET_BASE_SIGS, schoolSuffix);
+}
+
+/** API 요청의 schoolSuffix (없으면 레거시 SCHOOL_SUFFIX 속성) */
+function resolveSchoolSuffix_(body) {
+  const fromBody = String((body && body.schoolSuffix) || "").trim();
+  if (fromBody) {
+    assertAllowedSchoolSuffix_(fromBody);
+    return fromBody;
+  }
+  const legacy = PropertiesService.getScriptProperties().getProperty("SCHOOL_SUFFIX");
+  if (legacy && String(legacy).trim()) {
+    return String(legacy).trim();
+  }
+  throw new Error("schoolSuffix가 필요합니다. 학교 코드를 먼저 입력해 주세요.");
+}
+
+function assertAllowedSchoolSuffix_(suffix) {
+  const raw = PropertiesService.getScriptProperties().getProperty("SCHOOL_SUFFIXES");
+  if (!raw || !String(raw).trim()) return;
+  const allowed = String(raw)
+    .split(",")
+    .map(function (s) {
+      return s.trim();
+    })
+    .filter(Boolean);
+  if (allowed.indexOf(suffix) < 0) {
+    throw new Error("등록되지 않은 학교입니다: " + suffix);
+  }
+}
 
 const HEADERS = {
   events: ["eventId", "title", "date", "location", "description", "status", "targetType", "targetData", "active"],
@@ -38,7 +86,8 @@ function handleRequest_(e) {
       return jsonResponse_({ ok: false, message: "action이 필요합니다." });
     }
 
-    ensureSheets_();
+    const schoolSuffix = resolveSchoolSuffix_(body);
+    ensureSheets_(schoolSuffix);
 
     const adminActions = [
       "loginAdmin",
@@ -56,58 +105,67 @@ function handleRequest_(e) {
     ];
 
     if (adminActions.indexOf(action) >= 0 && action !== "loginAdmin") {
-      requireAdmin_(adminToken);
+      requireAdmin_(adminToken, schoolSuffix);
     }
 
     let data;
     switch (action) {
       case "loginAdmin":
-        data = loginAdmin_(payload);
+        data = loginAdmin_(payload, schoolSuffix);
         break;
       case "getEvents":
-        data = getEvents_(false);
+        data = getEvents_(false, schoolSuffix);
         break;
       case "getAdminEvents":
-        data = getEvents_(true);
+        data = getEvents_(true, schoolSuffix);
         break;
       case "createEvent":
-        data = createEvent_(payload);
+        data = createEvent_(payload, schoolSuffix);
         break;
       case "updateEvent":
-        data = updateEvent_(payload);
+        data = updateEvent_(payload, schoolSuffix);
         break;
       case "deleteEvent":
-        data = deleteEvent_(payload.eventId);
+        data = deleteEvent_(payload.eventId, schoolSuffix);
         break;
       case "getStaffForEvent":
-        data = getStaffForEvent_(payload.eventId);
+        data = getStaffForEvent_(payload.eventId, schoolSuffix);
+        break;
+      case "getStaffForEvents":
+        data = getStaffForEvents_(payload.eventIds, schoolSuffix);
         break;
       case "getStaffList":
-        data = getStaffList_(payload.includeInactive);
+        data = getStaffList_(payload.includeInactive, schoolSuffix);
         break;
       case "uploadStaffCsv":
-        data = uploadStaffCsv_(payload);
+        data = uploadStaffCsv_(payload, schoolSuffix);
         break;
       case "addStaff":
-        data = saveStaff_(payload, false);
+        data = saveStaff_(payload, false, schoolSuffix);
         break;
       case "updateStaff":
-        data = saveStaff_(payload, true);
+        data = saveStaff_(payload, true, schoolSuffix);
         break;
       case "deleteStaff":
-        data = deleteStaff_(payload.staffId);
+        data = deleteStaff_(payload.staffId, schoolSuffix);
         break;
       case "checkSignature":
-        data = checkSignature_(payload);
+        data = checkSignature_(payload, schoolSuffix);
+        break;
+      case "checkSignaturesBulk":
+        data = checkSignaturesBulk_(payload, schoolSuffix);
         break;
       case "submitSignature":
-        data = submitSignature_(payload);
+        data = submitSignature_(payload, schoolSuffix);
+        break;
+      case "submitSignaturesBulk":
+        data = submitSignaturesBulk_(payload, schoolSuffix);
         break;
       case "getSignatureStatus":
-        data = getSignatureStatus_(payload.eventId);
+        data = getSignatureStatus_(payload.eventId, schoolSuffix);
         break;
       case "getPrintableRegister":
-        data = getPrintableRegister_(payload.eventId);
+        data = getPrintableRegister_(payload.eventId, schoolSuffix);
         break;
       default:
         return jsonResponse_({ ok: false, message: "알 수 없는 action: " + action });
@@ -131,18 +189,18 @@ function getSpreadsheet_() {
   return SpreadsheetApp.openById(id);
 }
 
-function ensureSheets_() {
+function ensureSheets_(schoolSuffix) {
   const ss = getSpreadsheet_();
-  ensureSheet_(ss, SHEET_EVENTS, HEADERS.events);
-  ensureSheet_(ss, SHEET_STAFF, HEADERS.staff);
-  ensureStaffColumns_(ss);
-  ensureSheet_(ss, SHEET_SIGS, HEADERS.sigs);
+  ensureSheet_(ss, getSheetEvents_(schoolSuffix), HEADERS.events);
+  ensureSheet_(ss, getSheetStaff_(schoolSuffix), HEADERS.staff);
+  ensureStaffColumns_(ss, schoolSuffix);
+  ensureSheet_(ss, getSheetSigs_(schoolSuffix), HEADERS.sigs);
   return ss;
 }
 
 /** 기존 구성원명단 시트에 staffRank·remarks 열이 없으면 추가 */
-function ensureStaffColumns_(ss) {
-  const sh = ss.getSheetByName(SHEET_STAFF);
+function ensureStaffColumns_(ss, schoolSuffix) {
+  const sh = ss.getSheetByName(getSheetStaff_(schoolSuffix));
   if (!sh || sh.getLastRow() === 0) return;
   let headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
 
@@ -239,30 +297,42 @@ function deleteRowById_(sheetName, idField, idValue) {
 
 /* ───────────── 관리자 인증 ───────────── */
 
-function loginAdmin_(payload) {
-  const expected = PropertiesService.getScriptProperties().getProperty("ADMIN_PASSWORD");
-  if (!expected) throw new Error("ADMIN_PASSWORD가 설정되지 않았습니다.");
+function getAdminPasswordForSchool_(schoolSuffix) {
+  const props = PropertiesService.getScriptProperties();
+  const perSchool = props.getProperty("ADMIN_PASSWORD_" + schoolSuffix);
+  if (perSchool) return perSchool;
+  const common = props.getProperty("ADMIN_PASSWORD");
+  if (!common) throw new Error("ADMIN_PASSWORD가 설정되지 않았습니다.");
+  return common;
+}
+
+function adminCacheKey_(token, schoolSuffix) {
+  return "admin_" + token + "_" + schoolSuffix;
+}
+
+function loginAdmin_(payload, schoolSuffix) {
+  const expected = getAdminPasswordForSchool_(schoolSuffix);
   if (!payload.password || payload.password !== expected) {
     throw new Error("관리자 암호가 올바르지 않습니다.");
   }
   const token = Utilities.getUuid();
   const cache = CacheService.getScriptCache();
-  cache.put("admin_" + token, "1", 21600); // 6시간
-  return { token: token };
+  cache.put(adminCacheKey_(token, schoolSuffix), "1", 21600); // 6시간
+  return { token: token, schoolSuffix: schoolSuffix };
 }
 
-function requireAdmin_(token) {
+function requireAdmin_(token, schoolSuffix) {
   if (!token) throw new Error("관리자 로그인이 필요합니다.");
   const cache = CacheService.getScriptCache();
-  if (!cache.get("admin_" + token)) {
+  if (!cache.get(adminCacheKey_(token, schoolSuffix))) {
     throw new Error("인증이 만료되었습니다. 다시 로그인해 주세요.");
   }
 }
 
 /* ───────────── 연수·회의 ───────────── */
 
-function getEvents_(adminMode) {
-  const rows = readSheetObjects_(SHEET_EVENTS);
+function getEvents_(adminMode, schoolSuffix) {
+  const rows = readSheetObjects_(getSheetEvents_(schoolSuffix));
   return rows
     .filter((r) => {
       if (adminMode) return true;
@@ -287,10 +357,10 @@ function normalizeEvent_(r) {
   };
 }
 
-function createEvent_(p) {
+function createEvent_(p, schoolSuffix) {
   const eventId = "ev_" + Utilities.getUuid().replace(/-/g, "").slice(0, 12);
   const active = p.status === "진행중" ? "Y" : "Y";
-  appendRow_(SHEET_EVENTS, {
+  appendRow_(getSheetEvents_(schoolSuffix), {
     eventId: eventId,
     title: p.title,
     date: p.date,
@@ -304,9 +374,9 @@ function createEvent_(p) {
   return { eventId: eventId };
 }
 
-function updateEvent_(p) {
+function updateEvent_(p, schoolSuffix) {
   if (!p.eventId) throw new Error("eventId가 필요합니다.");
-  const updated = updateRowById_(SHEET_EVENTS, "eventId", p.eventId, {
+  const updated = updateRowById_(getSheetEvents_(schoolSuffix), "eventId", p.eventId, {
     title: p.title,
     date: p.date,
     location: p.location || "",
@@ -320,17 +390,17 @@ function updateEvent_(p) {
   return { eventId: p.eventId };
 }
 
-function deleteEvent_(eventId) {
+function deleteEvent_(eventId, schoolSuffix) {
   if (!eventId) throw new Error("eventId가 필요합니다.");
-  if (!deleteRowById_(SHEET_EVENTS, "eventId", eventId)) {
+  if (!deleteRowById_(getSheetEvents_(schoolSuffix), "eventId", eventId)) {
     throw new Error("연수를 찾을 수 없습니다.");
   }
-  deleteSignaturesByEventId_(eventId);
+  deleteSignaturesByEventId_(eventId, schoolSuffix);
   return { deleted: true, eventId: eventId };
 }
 
-function deleteSignaturesByEventId_(eventId) {
-  const sh = getSpreadsheet_().getSheetByName(SHEET_SIGS);
+function deleteSignaturesByEventId_(eventId, schoolSuffix) {
+  const sh = getSpreadsheet_().getSheetByName(getSheetSigs_(schoolSuffix));
   if (!sh || sh.getLastRow() < 2) return;
   const data = sh.getDataRange().getValues();
   const headers = data[0].map(String);
@@ -343,16 +413,16 @@ function deleteSignaturesByEventId_(eventId) {
   }
 }
 
-function getEventById_(eventId) {
-  const rows = readSheetObjects_(SHEET_EVENTS);
+function getEventById_(eventId, schoolSuffix) {
+  const rows = readSheetObjects_(getSheetEvents_(schoolSuffix));
   const found = rows.find((r) => String(r.eventId) === String(eventId));
   return found ? normalizeEvent_(found) : null;
 }
 
 /* ───────────── 구성원 ───────────── */
 
-function getStaffList_(includeInactive) {
-  const rows = readSheetObjects_(SHEET_STAFF);
+function getStaffList_(includeInactive, schoolSuffix) {
+  const rows = readSheetObjects_(getSheetStaff_(schoolSuffix));
   return rows
     .filter((r) => includeInactive || String(r.active || "Y").toUpperCase() === "Y")
     .map(normalizeStaff_);
@@ -370,13 +440,13 @@ function normalizeStaff_(r) {
   };
 }
 
-function getStaffForEvent_(eventId) {
-  const ev = getEventById_(eventId);
+function getStaffForEvent_(eventId, schoolSuffix) {
+  const ev = getEventById_(eventId, schoolSuffix);
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
   if (ev.status === "마감") {
     // 목록은 보이되 제출은 프론트/서버에서 차단
   }
-  let staff = getStaffList_(false);
+  let staff = getStaffList_(false, schoolSuffix);
   const type = ev.targetType || "all";
   const data = (ev.targetData || "").trim();
 
@@ -390,9 +460,30 @@ function getStaffForEvent_(eventId) {
   return staff;
 }
 
-function saveStaff_(p, isUpdate) {
+/** 선택한 모든 연수의 대상자 교집합 (일괄 서명용) */
+function getStaffForEvents_(eventIds, schoolSuffix) {
+  if (!eventIds || !eventIds.length) return [];
+  let pool = null;
+  eventIds.forEach(function (eid) {
+    const staff = getStaffForEvent_(eid, schoolSuffix);
+    if (pool === null) {
+      pool = staff;
+    } else {
+      const idSet = {};
+      staff.forEach(function (s) {
+        idSet[String(s.staffId)] = true;
+      });
+      pool = pool.filter(function (s) {
+        return idSet[String(s.staffId)];
+      });
+    }
+  });
+  return pool || [];
+}
+
+function saveStaff_(p, isUpdate, schoolSuffix) {
   if (isUpdate && p.staffId) {
-    updateRowById_(SHEET_STAFF, "staffId", p.staffId, {
+    updateRowById_(getSheetStaff_(schoolSuffix), "staffId", p.staffId, {
       department: p.department,
       position: p.position || "",
       staffRank: p.staffRank || "",
@@ -403,7 +494,7 @@ function saveStaff_(p, isUpdate) {
     return { staffId: p.staffId };
   }
   const staffId = "st_" + Utilities.getUuid().replace(/-/g, "").slice(0, 12);
-  appendRow_(SHEET_STAFF, {
+  appendRow_(getSheetStaff_(schoolSuffix), {
     staffId: staffId,
     department: p.department,
     position: p.position || "",
@@ -415,14 +506,14 @@ function saveStaff_(p, isUpdate) {
   return { staffId: staffId };
 }
 
-function deleteStaff_(staffId) {
-  if (!deleteRowById_(SHEET_STAFF, "staffId", staffId)) {
+function deleteStaff_(staffId, schoolSuffix) {
+  if (!deleteRowById_(getSheetStaff_(schoolSuffix), "staffId", staffId)) {
     throw new Error("구성원을 찾을 수 없습니다.");
   }
   return { deleted: true };
 }
 
-function uploadStaffCsv_(payload) {
+function uploadStaffCsv_(payload, schoolSuffix) {
   const lines = (payload.csvText || "").split(/\r?\n/).filter((l) => l.trim());
   const errors = [];
   const newRows = [];
@@ -458,12 +549,12 @@ function uploadStaffCsv_(payload) {
   }
 
   if (payload.overwrite) {
-    const sh = getSpreadsheet_().getSheetByName(SHEET_STAFF);
+    const sh = getSpreadsheet_().getSheetByName(getSheetStaff_(schoolSuffix));
     if (sh.getLastRow() > 1) sh.deleteRows(2, sh.getLastRow() - 1);
   }
 
   newRows.forEach((r) => {
-    saveStaff_(r, false);
+    saveStaff_(r, false, schoolSuffix);
   });
 
   return { added: newRows.length, errors: errors };
@@ -502,8 +593,8 @@ function isHeaderRow_(cols) {
 
 /* ───────────── 서명 ───────────── */
 
-function checkSignature_(payload) {
-  const sigs = readSheetObjects_(SHEET_SIGS);
+function checkSignature_(payload, schoolSuffix) {
+  const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix));
   const exists = sigs.some(
     (s) =>
       String(s.eventId) === String(payload.eventId) &&
@@ -513,16 +604,76 @@ function checkSignature_(payload) {
   return { exists: exists };
 }
 
-function submitSignature_(payload) {
-  const ev = getEventById_(payload.eventId);
+function checkSignaturesBulk_(payload, schoolSuffix) {
+  const eventIds = payload.eventIds || [];
+  const existingEvents = [];
+  eventIds.forEach(function (eid) {
+    const check = checkSignature_(
+      {
+        eventId: eid,
+        staffId: payload.staffId,
+        department: payload.department,
+        name: payload.name,
+      },
+      schoolSuffix
+    );
+    if (check.exists) {
+      const ev = getEventById_(eid, schoolSuffix);
+      existingEvents.push({
+        eventId: eid,
+        title: ev ? ev.title : String(eid),
+      });
+    }
+  });
+  return { exists: existingEvents.length > 0, existingEvents: existingEvents };
+}
+
+function submitSignaturesBulk_(payload, schoolSuffix) {
+  const eventIds = payload.eventIds || [];
+  if (!eventIds.length) throw new Error("연수를 하나 이상 선택해 주세요.");
+
+  const results = [];
+  let submitted = 0;
+  eventIds.forEach(function (eid) {
+    try {
+      submitSignature_(
+        {
+          eventId: eid,
+          staffId: payload.staffId,
+          department: payload.department,
+          name: payload.name,
+          position: payload.position,
+          signatureData: payload.signatureData,
+          overwrite: payload.overwrite,
+        },
+        schoolSuffix
+      );
+      results.push({ eventId: eid, ok: true });
+      submitted++;
+    } catch (err) {
+      results.push({ eventId: eid, ok: false, message: err.message || String(err) });
+    }
+  });
+
+  const failed = results.filter(function (r) {
+    return !r.ok;
+  });
+  if (submitted === 0) {
+    throw new Error((failed[0] && failed[0].message) || "제출에 실패했습니다.");
+  }
+  return { submitted: submitted, total: eventIds.length, results: results };
+}
+
+function submitSignature_(payload, schoolSuffix) {
+  const ev = getEventById_(payload.eventId, schoolSuffix);
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
   if (ev.status === "마감") throw new Error("마감된 연수에는 제출할 수 없습니다.");
 
-  const targetStaff = getStaffForEvent_(payload.eventId);
+  const targetStaff = getStaffForEvent_(payload.eventId, schoolSuffix);
   const allowed = targetStaff.some((s) => String(s.staffId) === String(payload.staffId));
   if (!allowed) throw new Error("이 연수의 대상자가 아닙니다.");
 
-  const sigs = readSheetObjects_(SHEET_SIGS);
+  const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix));
   let existingIdx = -1;
   for (let i = 0; i < sigs.length; i++) {
     if (
@@ -550,7 +701,7 @@ function submitSignature_(payload) {
     staffId: payload.staffId,
   };
 
-  const sh = getSpreadsheet_().getSheetByName(SHEET_SIGS);
+  const sh = getSpreadsheet_().getSheetByName(getSheetSigs_(schoolSuffix));
   const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
 
   if (existingIdx >= 0) {
@@ -559,15 +710,15 @@ function submitSignature_(payload) {
       if (row[h] !== undefined) sh.getRange(sheetRow, col + 1).setValue(row[h]);
     });
   } else {
-    appendRow_(SHEET_SIGS, row);
+    appendRow_(getSheetSigs_(schoolSuffix), row);
   }
 
   return { success: true };
 }
 
-function getSignatureStatus_(eventId) {
-  const targets = getStaffForEvent_(eventId);
-  const sigs = readSheetObjects_(SHEET_SIGS).filter((s) => String(s.eventId) === String(eventId));
+function getSignatureStatus_(eventId, schoolSuffix) {
+  const targets = getStaffForEvent_(eventId, schoolSuffix);
+  const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
 
   const signedMap = {};
   sigs.forEach((s) => {
@@ -607,11 +758,11 @@ function getSignatureStatus_(eventId) {
   };
 }
 
-function getPrintableRegister_(eventId) {
-  const ev = getEventById_(eventId);
+function getPrintableRegister_(eventId, schoolSuffix) {
+  const ev = getEventById_(eventId, schoolSuffix);
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
-  const targets = getStaffForEvent_(eventId);
-  const sigs = readSheetObjects_(SHEET_SIGS).filter((s) => String(s.eventId) === String(eventId));
+  const targets = getStaffForEvent_(eventId, schoolSuffix);
+  const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
   const sigByStaff = {};
   sigs.forEach((s) => {
     sigByStaff[String(s.staffId || "")] = s;
@@ -661,9 +812,27 @@ function jsonResponse_(obj) {
  * Apps Script 편집기에서 setupSignOnSheets 실행
  */
 function setupSignOnSheets() {
-  const ss = ensureSheets_();
+  const suffix = PropertiesService.getScriptProperties().getProperty("SCHOOL_SUFFIX") || "이솔고";
+  const ss = ensureSheets_(String(suffix).trim());
   Logger.log("시트 준비 완료: " + ss.getName());
   Logger.log("탭 목록: " + ss.getSheets().map(function (s) { return s.getName(); }).join(", "));
+}
+
+/**
+ * 새 학교 탭 3개 생성
+ * GAS 편집기에서 provisionSchoolSheets("하길고") 실행
+ */
+function provisionSchoolSheets(schoolSuffix) {
+  const suffix = String(schoolSuffix || "").trim();
+  if (!suffix) throw new Error("schoolSuffix 인자가 필요합니다. 예: provisionSchoolSheets(\"하길고\")");
+  const ss = getSpreadsheet_();
+  ensureSheet_(ss, getSheetEvents_(suffix), HEADERS.events);
+  ensureSheet_(ss, getSheetStaff_(suffix), HEADERS.staff);
+  ensureStaffColumns_(ss, suffix);
+  ensureSheet_(ss, getSheetSigs_(suffix), HEADERS.sigs);
+  Logger.log("[" + suffix + "] 탭 준비 완료");
+  Logger.log(getSheetEvents_(suffix) + " | " + getSheetStaff_(suffix) + " | " + getSheetSigs_(suffix));
+  Logger.log("전체 탭: " + ss.getSheets().map(function (s) { return s.getName(); }).join(", "));
 }
 
 /**
@@ -673,18 +842,27 @@ function setupSignOnSheets() {
 function diagnoseSignOnSetup() {
   const props = PropertiesService.getScriptProperties();
   const rawId = props.getProperty("SPREADSHEET_ID");
+  const suffix = props.getProperty("SCHOOL_SUFFIX");
   const hasPassword = !!props.getProperty("ADMIN_PASSWORD");
 
   Logger.log("=== 싸인온 설정 진단 ===");
   Logger.log("SPREADSHEET_ID 있음: " + (rawId ? "예" : "아니오 — 스크립트 속성을 추가하세요"));
+  const suffixes = props.getProperty("SCHOOL_SUFFIXES");
+  Logger.log("SCHOOL_SUFFIX (레거시): " + (suffix ? suffix : "없음"));
+  Logger.log("SCHOOL_SUFFIXES: " + (suffixes ? suffixes : "없음 — 예: 이솔고,하길고"));
   Logger.log("ADMIN_PASSWORD 있음: " + (hasPassword ? "예" : "아니오"));
+  if (suffix) {
+    Logger.log(
+      "레거시 탭 예: " + getSheetEvents_(suffix) + ", " + getSheetStaff_(suffix) + ", " + getSheetSigs_(suffix)
+    );
+  }
   if (!rawId) return;
 
   try {
     const ss = getSpreadsheet_();
     Logger.log("연결된 파일 이름: " + ss.getName());
     Logger.log("연결 전 탭: " + ss.getSheets().map(function (s) { return s.getName(); }).join(", "));
-    ensureSheets_();
+    if (suffix) ensureSheets_(suffix);
     Logger.log("연결 후 탭: " + ss.getSheets().map(function (s) { return s.getName(); }).join(", "));
     Logger.log("=== 성공: 브라우저에서 스프레드시트를 새로고침(F5) 하세요 ===");
   } catch (err) {
