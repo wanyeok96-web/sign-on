@@ -230,6 +230,7 @@
         e.preventDefault();
         SignaturePad.drawing = true;
         SignaturePad.hasStroke = true;
+        StaffApp.validateSubmitButton();
         const p = SignaturePad.point(e);
         SignaturePad.ctx.beginPath();
         SignaturePad.ctx.moveTo(p.x, p.y);
@@ -241,6 +242,7 @@
         const p = SignaturePad.point(e);
         SignaturePad.ctx.lineTo(p.x, p.y);
         SignaturePad.ctx.stroke();
+        StaffApp.validateSubmitButton();
       };
 
       const end = () => {
@@ -255,6 +257,7 @@
       canvasEl.addEventListener("touchstart", start, { passive: false });
       canvasEl.addEventListener("touchmove", move, { passive: false });
       canvasEl.addEventListener("touchend", end);
+      canvasEl.addEventListener("touchcancel", end);
     },
 
     resize() {
@@ -310,6 +313,7 @@
       eventIds: [],
       department: "",
       staffId: "",
+      staffKey: "",
       name: "",
       position: "",
     },
@@ -414,6 +418,12 @@
       const clearBtn = document.getElementById("btnClearSignature");
       if (canvas) canvas.style.pointerEvents = locked ? "none" : "";
       if (clearBtn) clearBtn.style.pointerEvents = locked ? "none" : "";
+
+      // 카드가 hidden(display:none) 상태에서 캔버스를 초기화하면 크기(0)가 잡혀
+      // 서명이 입력돼도 인식이 안 되는 경우가 있어, 잠금 해제 후 리사이즈를 한 번 더 수행.
+      if (!locked) {
+        requestAnimationFrame(() => SignaturePad.resize());
+      }
     },
 
     unlockSchool() {
@@ -573,6 +583,7 @@
       const ids = StaffApp.state.eventIds;
       StaffApp.state.department = "";
       StaffApp.state.staffId = "";
+      StaffApp.state.staffKey = "";
       StaffApp.markStep(2, ids.length > 0);
 
       const btn = document.getElementById("btnStaffSelectAllEvents");
@@ -596,6 +607,7 @@
 
       StaffApp.loadStaffForSelectedEvents();
       StaffApp.resetDeptName();
+      StaffApp.validateSubmitButton();
     },
 
     onDateChange() {
@@ -606,6 +618,7 @@
       StaffApp.state.eventIds = [];
       StaffApp.state.department = "";
       StaffApp.state.staffId = "";
+      StaffApp.state.staffKey = "";
       StaffApp.markStep(1, !!dateSel.value);
       StaffApp.resetDeptName();
 
@@ -651,7 +664,13 @@
         StaffApp.staffPool = await Api.call("getStaffForEvents", {
           eventIds: StaffApp.state.eventIds,
         });
-        const depts = [...new Set(StaffApp.staffPool.map((s) => s.department))].sort();
+        const depts = [...new Set(StaffApp.staffPool.map((s) => String(s.department || "").trim()))]
+          .filter(Boolean)
+          .sort((a, b) => {
+            const da = getDepartmentRank(a);
+            const db = getDepartmentRank(b);
+            return da !== db ? da - db : a.localeCompare(b, "ko");
+          });
         const deptSel = document.getElementById("staffDeptSelect");
         deptSel.disabled = false;
         deptSel.innerHTML = '<option value="">부서를 선택해 주세요</option>';
@@ -674,6 +693,7 @@
       const dept = document.getElementById("staffDeptSelect").value;
       StaffApp.state.department = dept;
       StaffApp.state.staffId = "";
+      StaffApp.state.staffKey = "";
       const nameSel = document.getElementById("staffNameSelect");
       nameSel.innerHTML = '<option value="">이름을 선택해 주세요</option>';
       if (!dept) {
@@ -703,13 +723,17 @@
       if (opt?.dataset.staff) {
         const s = JSON.parse(opt.dataset.staff);
         StaffApp.state.staffId = s.staffId;
+        StaffApp.state.staffKey = s.staffId || `${s.department || ""}|${s.name || ""}`;
         StaffApp.state.name = s.name;
         StaffApp.state.position = s.position || "";
         StaffApp.selectedStaff = s;
         StaffApp.markStep(4, true);
         StaffApp.markStep(5, false);
+        // STEP 5가 실제로 보이는 시점에 캔버스 크기 보정
+        requestAnimationFrame(() => SignaturePad.resize());
       } else {
         StaffApp.state.staffId = "";
+        StaffApp.state.staffKey = "";
         StaffApp.markStep(4, false);
         StaffApp.markStep(5, false);
       }
@@ -744,16 +768,16 @@
       if (num === 2) return !!StaffApp.state.selectedDate;
       if (num === 3) return StaffApp.state.eventIds.length > 0;
       if (num === 4) return !!StaffApp.state.department;
-      if (num === 5) return !!StaffApp.state.staffId;
+      if (num === 5) return !!StaffApp.state.staffKey;
       return false;
     },
 
     validateSubmitButton() {
       const btn = document.getElementById("btnStaffSubmit");
-      const ok =
-        StaffApp.state.eventIds.length > 0 &&
-        StaffApp.state.staffId &&
-        !SignaturePad.isEmpty();
+      // 서명 입력 감지는 기기별 이벤트 차이가 있어,
+      // 버튼 활성화는 선택 상태(연수/이름) 기준으로 처리하고
+      // 실제 서명 누락 여부는 제출 시점(onSubmitClick)에서 검증한다.
+      const ok = StaffApp.state.eventIds.length > 0 && StaffApp.state.staffKey;
       if (btn) btn.disabled = !ok;
     },
 
@@ -763,7 +787,7 @@
     },
 
     async onSubmitClick() {
-      if (!StaffApp.state.eventIds.length || !StaffApp.state.staffId) {
+      if (!StaffApp.state.eventIds.length || !StaffApp.state.staffKey) {
         UI.toastMsg("연수, 부서, 이름을 모두 선택해 주세요.", true);
         return;
       }
@@ -862,6 +886,7 @@
         eventIds: [],
         department: "",
         staffId: "",
+        staffKey: "",
         name: "",
         position: "",
       };
@@ -1773,29 +1798,47 @@
       const tbody = document.getElementById("printTableBody");
       tbody.innerHTML = "";
 
-      let rowNum = 0;
-      groupRowsByDepartment(rows).forEach((group) => {
-        group.rows.forEach((row, index) => {
-          const tr = document.createElement("tr");
-          rowNum += 1;
-          const sigHtml = safeSignatureImg(row.signatureData);
-          const deptCell =
-            index === 0
-              ? `<td rowspan="${group.rows.length}">${escapeHtml(group.department)}</td>`
-              : "";
-          tr.innerHTML = `
-            <td>${rowNum}</td>
-            ${deptCell}
-            <td>${escapeHtml(row.position || "")}</td>
-            <td>${escapeHtml(row.name)}</td>
-            <td class="print-sig-cell">${sigHtml}</td>
-            <td></td>
-          `;
-          tbody.appendChild(tr);
-        });
-      });
+      const signedCount = rows.filter((r) => !!String(r.signatureData || "").trim()).length;
+      const unsignedCount = Math.max(0, rows.length - signedCount);
+      const summaryEl = document.getElementById("printSignatureSummary");
+      if (summaryEl) {
+        summaryEl.textContent = `총 ${rows.length}명 · 서명 ${signedCount}명 · 미서명 ${unsignedCount}명`;
+      }
+
+      const half = Math.ceil(rows.length / 2);
+      const leftRows = rows.slice(0, half);
+      const rightRows = rows.slice(half);
+
+      for (let i = 0; i < half; i++) {
+        const tr = document.createElement("tr");
+        const left = leftRows[i] || null;
+        const right = rightRows[i] || null;
+
+        tr.innerHTML = `
+          ${AdminApp.renderPrintRowCells(left, i + 1)}
+          ${AdminApp.renderPrintRowCells(right, half + i + 1)}
+        `;
+        tbody.appendChild(tr);
+      }
 
       document.getElementById("printAttendeeCount").textContent = `${rows.length} 명`;
+      document.getElementById("printSignedCount").textContent = `${signedCount} 명`;
+      document.getElementById("printUnsignedCount").textContent = `${unsignedCount} 명`;
+    },
+
+    renderPrintRowCells(row, num) {
+      if (!row) {
+        return "<td></td><td></td><td></td><td></td><td></td><td></td>";
+      }
+      const sigHtml = safeSignatureImg(row.signatureData);
+      return `
+        <td>${num}</td>
+        <td>${escapeHtml(row.department || "")}</td>
+        <td>${escapeHtml(row.position || "")}</td>
+        <td>${escapeHtml(row.name || "")}</td>
+        <td class="print-sig-cell">${sigHtml}</td>
+        <td></td>
+      `;
     },
   };
 
@@ -1852,8 +1895,14 @@
   ];
 
   function getDepartmentRank(name) {
-    const idx = DEPARTMENT_ORDER.indexOf(String(name || ""));
-    return idx === -1 ? 999 : idx;
+    const key = String(name || "").trim();
+    const gradeMatch = key.match(/^([123])학년부$/);
+    // 1/2/3학년부는 항상 마지막으로 보낸다.
+    if (gradeMatch) return 9000 + parseInt(gradeMatch[1], 10);
+
+    const idx = DEPARTMENT_ORDER.indexOf(key);
+    // 미지정 부서는 고정 우선순위 부서 뒤, 학년부 앞에 배치
+    return idx === -1 ? 5000 : idx;
   }
 
   function isDepartmentHead(row) {

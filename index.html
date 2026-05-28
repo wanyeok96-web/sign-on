@@ -428,14 +428,25 @@
                     <span class="print-doc-label">연수일시</span>
                     <span class="print-doc-value" id="printTrainingDatetime"></span>
                   </li>
+                  <li>
+                    <span class="print-doc-bullet" aria-hidden="true">•</span>
+                    <span class="print-doc-label">서명현황</span>
+                    <span class="print-doc-value" id="printSignatureSummary">총 0명 · 서명 0명 · 미서명 0명</span>
+                  </li>
                 </ul>
               </header>
-              <table class="print-table" id="printTable">
+              <table class="print-table print-table--two-col" id="printTable">
                 <thead>
                   <tr>
                     <th scope="col">연번</th>
-                    <th scope="col">부서명</th>
-                    <th scope="col">직</th>
+                    <th scope="col">부서</th>
+                    <th scope="col">직위</th>
+                    <th scope="col">성명</th>
+                    <th scope="col">서명</th>
+                    <th scope="col">비고</th>
+                    <th scope="col">연번</th>
+                    <th scope="col">부서</th>
+                    <th scope="col">직위</th>
                     <th scope="col">성명</th>
                     <th scope="col">서명</th>
                     <th scope="col">비고</th>
@@ -444,10 +455,13 @@
                 <tbody id="printTableBody"></tbody>
                 <tfoot>
                   <tr class="print-table-summary">
-                    <td colspan="3">연수 참석인원</td>
+                    <td colspan="2">총 인원</td>
                     <td id="printAttendeeCount">0 명</td>
-                    <td></td>
-                    <td></td>
+                    <td colspan="2">서명 인원</td>
+                    <td id="printSignedCount">0 명</td>
+                    <td colspan="2">미서명</td>
+                    <td id="printUnsignedCount">0 명</td>
+                    <td colspan="3"></td>
                   </tr>
                 </tfoot>
               </table>

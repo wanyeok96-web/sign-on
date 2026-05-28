@@ -430,12 +430,12 @@ function getStaffList_(includeInactive, schoolSuffix) {
 
 function normalizeStaff_(r) {
   return {
-    staffId: String(r.staffId || ""),
-    department: String(r.department || ""),
-    position: String(r.position || ""),
-    staffRank: String(r.staffRank || ""),
-    name: String(r.name || ""),
-    remarks: String(r.remarks || ""),
+    staffId: String(r.staffId || "").trim(),
+    department: String(r.department || "").trim(),
+    position: String(r.position || "").trim(),
+    staffRank: String(r.staffRank || "").trim(),
+    name: String(r.name || "").trim(),
+    remarks: String(r.remarks || "").trim(),
     active: String(r.active || "Y").toUpperCase() === "Y" ? "Y" : "N",
   };
 }
@@ -451,11 +451,19 @@ function getStaffForEvent_(eventId, schoolSuffix) {
   const data = (ev.targetData || "").trim();
 
   if (type === "departments" && data) {
-    const depts = data.split(",").map((s) => s.trim());
-    staff = staff.filter((s) => depts.indexOf(s.department) >= 0);
+    const deptSet = {};
+    data.split(",").forEach(function (s) {
+      const v = String(s || "").trim();
+      if (v) deptSet[v] = true;
+    });
+    staff = staff.filter((s) => !!deptSet[String(s.department || "").trim()]);
   } else if (type === "members" && data) {
-    const ids = data.split(",").map((s) => s.trim());
-    staff = staff.filter((s) => ids.indexOf(s.staffId) >= 0);
+    const idSet = {};
+    data.split(",").forEach(function (s) {
+      const v = String(s || "").trim();
+      if (v) idSet[v] = true;
+    });
+    staff = staff.filter((s) => !!idSet[String(s.staffId || "").trim()]);
   }
   return staff;
 }
@@ -471,10 +479,10 @@ function getStaffForEvents_(eventIds, schoolSuffix) {
     } else {
       const idSet = {};
       staff.forEach(function (s) {
-        idSet[String(s.staffId)] = true;
+        idSet[String(s.staffId || "").trim()] = true;
       });
       pool = pool.filter(function (s) {
-        return idSet[String(s.staffId)];
+        return idSet[String(s.staffId || "").trim()];
       });
     }
   });
@@ -669,17 +677,28 @@ function submitSignature_(payload, schoolSuffix) {
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
   if (ev.status === "마감") throw new Error("마감된 연수에는 제출할 수 없습니다.");
 
+  const payloadStaffId = String(payload.staffId || "").trim();
+  const payloadDept = String(payload.department || "").trim();
+  const payloadName = String(payload.name || "").trim();
+
   const targetStaff = getStaffForEvent_(payload.eventId, schoolSuffix);
-  const allowed = targetStaff.some((s) => String(s.staffId) === String(payload.staffId));
+  const allowed = targetStaff.some((s) => {
+    const sid = String(s.staffId || "").trim();
+    if (payloadStaffId && sid && sid === payloadStaffId) return true;
+    return String(s.department || "").trim() === payloadDept && String(s.name || "").trim() === payloadName;
+  });
   if (!allowed) throw new Error("이 연수의 대상자가 아닙니다.");
 
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix));
   let existingIdx = -1;
   for (let i = 0; i < sigs.length; i++) {
-    if (
-      String(sigs[i].eventId) === String(payload.eventId) &&
-      String(sigs[i].staffId || "") === String(payload.staffId)
-    ) {
+    if (String(sigs[i].eventId) !== String(payload.eventId)) continue;
+    const sigStaffId = String(sigs[i].staffId || "").trim();
+    const byStaffId = payloadStaffId && sigStaffId && sigStaffId === payloadStaffId;
+    const byDeptName =
+      String(sigs[i].department || "").trim() === payloadDept &&
+      String(sigs[i].name || "").trim() === payloadName;
+    if (byStaffId || byDeptName) {
       existingIdx = i;
       break;
     }
@@ -698,7 +717,7 @@ function submitSignature_(payload, schoolSuffix) {
     position: payload.position || "",
     signatureData: payload.signatureData,
     userAgent: "",
-    staffId: payload.staffId,
+    staffId: payloadStaffId,
   };
 
   const sh = getSpreadsheet_().getSheetByName(getSheetSigs_(schoolSuffix));
@@ -765,12 +784,18 @@ function getPrintableRegister_(eventId, schoolSuffix) {
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
   const sigByStaff = {};
   sigs.forEach((s) => {
-    sigByStaff[String(s.staffId || "")] = s;
-    sigByStaff[s.department + "|" + s.name] = s;
+    const sid = String(s.staffId || "").trim();
+    const dept = String(s.department || "").trim();
+    const name = String(s.name || "").trim();
+    if (sid) sigByStaff[sid] = s;
+    if (dept || name) sigByStaff[dept + "|" + name] = s;
   });
 
   const rows = targets.map((t) => {
-    const rec = sigByStaff[String(t.staffId)] || sigByStaff[t.department + "|" + t.name];
+    const sid = String(t.staffId || "").trim();
+    const dept = String(t.department || "").trim();
+    const name = String(t.name || "").trim();
+    const rec = (sid ? sigByStaff[sid] : null) || sigByStaff[dept + "|" + name];
     return {
       department: t.department,
       name: t.name,

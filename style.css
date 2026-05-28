@@ -1266,13 +1266,13 @@ input[type="file"] {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
 }
 
 .print-table th,
 .print-table td {
   border: 1px solid #000;
-  padding: 5px 6px;
+  padding: 3px 4px;
   text-align: center;
   vertical-align: middle;
   word-break: keep-all;
@@ -1283,35 +1283,47 @@ input[type="file"] {
   font-weight: 700;
 }
 
-.print-table th:nth-child(1),
-.print-table td:nth-child(1) { width: 8%; }
-.print-table th:nth-child(2),
-.print-table td:nth-child(2) { width: 16%; }
-.print-table th:nth-child(3),
-.print-table td:nth-child(3) { width: 10%; }
-.print-table th:nth-child(4),
-.print-table td:nth-child(4) { width: 14%; }
-.print-table th:nth-child(5),
-.print-table td:nth-child(5) { width: 28%; }
-.print-table th:nth-child(6),
-.print-table td:nth-child(6) { width: 24%; }
+.print-table--two-col th:nth-child(1),
+.print-table--two-col td:nth-child(1),
+.print-table--two-col th:nth-child(7),
+.print-table--two-col td:nth-child(7) { width: 4%; }
+.print-table--two-col th:nth-child(2),
+.print-table--two-col td:nth-child(2),
+.print-table--two-col th:nth-child(8),
+.print-table--two-col td:nth-child(8) { width: 10%; }
+.print-table--two-col th:nth-child(3),
+.print-table--two-col td:nth-child(3),
+.print-table--two-col th:nth-child(9),
+.print-table--two-col td:nth-child(9) { width: 6%; }
+.print-table--two-col th:nth-child(4),
+.print-table--two-col td:nth-child(4),
+.print-table--two-col th:nth-child(10),
+.print-table--two-col td:nth-child(10) { width: 8%; }
+.print-table--two-col th:nth-child(5),
+.print-table--two-col td:nth-child(5),
+.print-table--two-col th:nth-child(11),
+.print-table--two-col td:nth-child(11) { width: 15%; }
+.print-table--two-col th:nth-child(6),
+.print-table--two-col td:nth-child(6),
+.print-table--two-col th:nth-child(12),
+.print-table--two-col td:nth-child(12) { width: 7%; }
 
 .print-table-summary td {
   font-weight: 700;
-  height: 32px;
+  height: 26px;
 }
 
 .print-table .print-sig {
   display: block;
   max-width: 92%;
-  max-height: 36px;
+  max-height: 28px;
   margin: 0 auto;
   object-fit: contain;
 }
 
 .print-table .print-sig-cell {
-  height: 40px;
-  padding: 2px 4px;
+  height: 30px;
+  padding: 1px 2px;
 }
 
 /* ── 반응형 ── */
@@ -1340,6 +1352,7 @@ input[type="file"] {
     color: #000;
   }
 
+  .site-credit,
   .hero,
   .main-nav,
   .admin-header,
@@ -1380,18 +1393,57 @@ input[type="file"] {
 
   .print-document {
     font-family: "Pretendard Variable", "Malgun Gothic", "Apple SD Gothic Neo", serif;
+    font-size: 9px;
   }
 
   .print-table {
     page-break-inside: auto;
+    font-size: 0.62rem;
   }
 
   .print-table tr {
     page-break-inside: avoid;
   }
 
+  .print-doc-header {
+    margin-bottom: 8px;
+  }
+
+  .print-doc-title {
+    margin: 0 0 6px;
+    font-size: 1.12rem;
+    letter-spacing: 0.2em;
+  }
+
+  .print-doc-info li {
+    margin: 0 0 2px;
+    line-height: 1.25;
+    font-size: 0.68rem;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 1px 2px;
+    line-height: 1.2;
+    height: 20px;
+  }
+
+  .print-table .print-sig-cell {
+    height: 24px;
+    padding: 0 1px;
+  }
+
+  .print-table .print-sig {
+    max-height: 18px;
+  }
+
+  /* 상단 요약(서명현황)을 이미 보여주므로 하단 요약행은 인쇄에서 생략 */
+  .print-table tfoot {
+    display: none;
+  }
+
   @page {
     size: A4 portrait;
-    margin: 15mm;
+    margin: 7mm;
   }
 }
