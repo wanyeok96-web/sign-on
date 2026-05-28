@@ -209,6 +209,33 @@
       const el = document.getElementById(id);
       if (el) el.hidden = true;
     },
+
+    setButtonLoading(btn, loading, label) {
+      if (!btn) return;
+      const spinner = btn.querySelector(".btn-spinner");
+      const icon = btn.querySelector(".btn-primary__icon");
+      const labelEl = btn.querySelector(".btn-label");
+      if (loading) {
+        if (!btn.dataset.prevLabel && labelEl) {
+          btn.dataset.prevLabel = labelEl.textContent;
+        }
+        btn.classList.add("is-loading");
+        btn.disabled = true;
+        btn.setAttribute("aria-busy", "true");
+        if (spinner) spinner.hidden = false;
+        if (icon) icon.hidden = true;
+        if (label && labelEl) labelEl.textContent = label;
+      } else {
+        btn.classList.remove("is-loading");
+        btn.removeAttribute("aria-busy");
+        if (spinner) spinner.hidden = true;
+        if (icon) icon.hidden = false;
+        if (labelEl && btn.dataset.prevLabel) {
+          labelEl.textContent = btn.dataset.prevLabel;
+          delete btn.dataset.prevLabel;
+        }
+      }
+    },
   };
 
   /* ─────────────────────────────────────────
@@ -803,6 +830,8 @@
         return;
       }
 
+      const submitBtn = document.getElementById("btnStaffSubmit");
+      UI.setButtonLoading(submitBtn, true, "확인 중…");
       try {
         const check = await Api.call("checkSignaturesBulk", {
           eventIds: StaffApp.state.eventIds,
@@ -821,12 +850,13 @@
           UI.openModal("overwriteModal");
           return;
         }
+        StaffApp.showConfirmModal();
       } catch (err) {
         UI.toastMsg(err.message, true);
-        return;
+      } finally {
+        UI.setButtonLoading(submitBtn, false);
+        StaffApp.validateSubmitButton();
       }
-
-      StaffApp.showConfirmModal();
     },
 
     showConfirmModal() {
@@ -842,39 +872,43 @@
       UI.closeModal("confirmModal");
       UI.closeModal("overwriteModal");
       const msgEl = document.getElementById("staffSubmitMessage");
+      const submitBtn = document.getElementById("btnStaffSubmit");
 
+      UI.setButtonLoading(submitBtn, true, "제출 중…");
       try {
-        const result = await UI.withLoading(
-          () =>
-            Api.call("submitSignaturesBulk", {
-              eventIds: StaffApp.state.eventIds,
-              staffId: StaffApp.state.staffId,
-              department: StaffApp.state.department,
-              name: StaffApp.state.name,
-              position: StaffApp.state.position,
-              signatureData: SignaturePad.toDataUrl(),
-              overwrite: !!skipCheck,
-            }),
-          "제출 중…"
-        );
-        document.getElementById("staffFormStack").hidden = true;
-        document.getElementById("staffSuccessCard").hidden = false;
-        const detail = document.getElementById("staffSuccessDetail");
-        if (detail) {
-          const n = result?.submitted ?? StaffApp.state.eventIds.length;
-          const total = result?.total ?? StaffApp.state.eventIds.length;
-          if (n < total) {
-            detail.textContent = `${n}건 제출 완료 (${total - n}건 실패). 관리자에게 문의해 주세요.`;
-          } else {
-            detail.textContent =
-              n > 1 ? `선택한 연수 ${n}건에 서명이 저장되었습니다. 감사합니다.` : "감사합니다. 창을 닫으셔도 됩니다.";
-          }
-        }
+        const result = await Api.call("submitSignaturesBulk", {
+          eventIds: StaffApp.state.eventIds,
+          staffId: StaffApp.state.staffId,
+          department: StaffApp.state.department,
+          name: StaffApp.state.name,
+          position: StaffApp.state.position,
+          signatureData: SignaturePad.toDataUrl(),
+          overwrite: !!skipCheck,
+        });
+        StaffApp.showSuccessModal(result);
         UI.setMessage(msgEl, "");
       } catch (err) {
         UI.setMessage(msgEl, err.message, true);
         UI.toastMsg(err.message, true);
+      } finally {
+        UI.setButtonLoading(submitBtn, false);
+        StaffApp.validateSubmitButton();
       }
+    },
+
+    showSuccessModal(result) {
+      const detail = document.getElementById("staffSuccessModalDetail");
+      const n = result?.submitted ?? StaffApp.state.eventIds.length;
+      const total = result?.total ?? StaffApp.state.eventIds.length;
+      if (detail) {
+        if (n < total) {
+          detail.textContent = `${n}건 제출 완료 (${total - n}건 실패). 관리자에게 문의해 주세요.`;
+        } else {
+          detail.textContent =
+            n > 1 ? `선택한 연수 ${n}건에 서명이 저장되었습니다. 감사합니다.` : "감사합니다. 창을 닫으셔도 됩니다.";
+        }
+      }
+      UI.openModal("staffSuccessModal");
     },
 
     async resetFlow(options = {}) {
@@ -890,11 +924,10 @@
         name: "",
         position: "",
       };
-      const successDetail = document.getElementById("staffSuccessDetail");
+      const successDetail = document.getElementById("staffSuccessModalDetail");
       if (successDetail) successDetail.textContent = "감사합니다. 창을 닫으셔도 됩니다.";
       SignaturePad.clear();
-      document.getElementById("staffFormStack").hidden = false;
-      document.getElementById("staffSuccessCard").hidden = true;
+      UI.closeModal("staffSuccessModal");
       StaffApp.resetDeptName();
       await StaffApp.loadEvents();
 

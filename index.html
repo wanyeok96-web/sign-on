@@ -180,26 +180,15 @@
           </div>
           <div class="submit-block submit-block--desktop">
             <button type="button" class="btn-primary" id="btnStaffSubmit" disabled>
+              <span class="btn-spinner" hidden aria-hidden="true"></span>
               <span class="btn-primary__icon" aria-hidden="true">✓</span>
-              서명 제출하기
+              <span class="btn-label">서명 제출하기</span>
             </button>
             <p class="submit-message" id="staffSubmitMessage" role="status"></p>
           </div>
         </section>
       </div>
 
-      <!-- 제출 완료 화면 -->
-      <section class="success-card" id="staffSuccessCard" hidden>
-        <div class="success-icon" aria-hidden="true">
-          <svg viewBox="0 0 52 52" class="success-check-svg">
-            <circle class="success-check-circle" cx="26" cy="26" r="24" fill="none"/>
-            <path class="success-check-path" fill="none" d="M14 27l8 8 16-18"/>
-          </svg>
-        </div>
-        <h2 class="success-title">제출이 완료되었습니다.</h2>
-        <p class="muted" id="staffSuccessDetail">감사합니다. 창을 닫으셔도 됩니다.</p>
-        <button type="button" class="btn-ghost" id="btnStaffAnother">다른 연수 서명하기</button>
-      </section>
     </main>
 
     <!-- ═══ 관리자 페이지 ═══ -->
@@ -479,7 +468,27 @@
       <p class="modal-subtitle" id="confirmModalText"></p>
       <div class="modal-actions modal-actions--row">
         <button type="button" class="btn-ghost" id="btnConfirmCancel">아니요, 다시 선택할게요</button>
-        <button type="button" class="btn-primary btn-primary--sm" id="btnConfirmSubmit">네, 제출합니다</button>
+        <button type="button" class="btn-primary btn-primary--sm" id="btnConfirmSubmit">
+          <span class="btn-spinner" hidden aria-hidden="true"></span>
+          <span class="btn-label">네, 제출합니다</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 서명 제출 완료 모달 -->
+  <div class="modal-backdrop" id="staffSuccessModal" hidden role="dialog" aria-modal="true" aria-labelledby="staffSuccessModalTitle">
+    <div class="modal-card modal-card--sm modal-card--success">
+      <div class="success-icon" aria-hidden="true">
+        <svg viewBox="0 0 52 52" class="success-check-svg">
+          <circle class="success-check-circle" cx="26" cy="26" r="24" fill="none"/>
+          <path class="success-check-path" fill="none" d="M14 27l8 8 16-18"/>
+        </svg>
+      </div>
+      <h2 class="modal-title success-title" id="staffSuccessModalTitle">제출이 완료되었습니다</h2>
+      <p class="modal-subtitle" id="staffSuccessModalDetail">감사합니다. 창을 닫으셔도 됩니다.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-primary btn-primary--sm" id="btnStaffAnother">다른 연수 서명하기</button>
       </div>
     </div>
   </div>
@@ -597,7 +606,10 @@
       <p class="modal-subtitle" id="overwriteModalText">수정 제출하시겠습니까?<br />기존 서명이 새 서명으로 바뀝니다.</p>
       <div class="modal-actions modal-actions--row">
         <button type="button" class="btn-ghost" id="btnOverwriteCancel">취소</button>
-        <button type="button" class="btn-primary btn-primary--sm" id="btnOverwriteOk">수정 제출</button>
+        <button type="button" class="btn-primary btn-primary--sm" id="btnOverwriteOk">
+          <span class="btn-spinner" hidden aria-hidden="true"></span>
+          <span class="btn-label">수정 제출</span>
+        </button>
       </div>
     </div>
   </div>

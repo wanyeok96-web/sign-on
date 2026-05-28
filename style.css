@@ -516,6 +516,53 @@ textarea {
 
 .btn-primary__icon { margin-right: 4px; }
 
+.btn-primary.is-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-primary--sm.is-loading {
+  display: inline-flex;
+}
+
+.btn-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.btn-spinner[hidden] {
+  display: none !important;
+}
+
+.btn-primary.is-loading .btn-primary__icon {
+  display: none;
+}
+
+.modal-card--success {
+  text-align: center;
+}
+
+.modal-card--success .success-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 12px;
+}
+
+.modal-card--success .success-title {
+  margin-bottom: 8px;
+}
+
+.modal-card--success .modal-subtitle {
+  margin-bottom: 20px;
+}
+
 .btn-ghost {
   min-height: 46px;
   padding: 10px 16px;
