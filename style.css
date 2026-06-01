@@ -28,6 +28,10 @@
 
 * { box-sizing: border-box; }
 
+html {
+  color-scheme: light;
+}
+
 html, body { height: 100%; margin: 0; }
 
 body {
@@ -39,7 +43,10 @@ body {
     linear-gradient(180deg, var(--mint-30) 0%, #f8fafc 100%);
 }
 
-button, input, select, textarea { font: inherit; }
+button, input, select, textarea {
+  font: inherit;
+  color-scheme: light;
+}
 
 .app {
   width: min(940px, calc(100% - 24px));
@@ -475,6 +482,8 @@ textarea {
   height: 200px;
   touch-action: none;
   cursor: crosshair;
+  background: #fff;
+  color-scheme: light;
 }
 
 .signature-pad-actions {

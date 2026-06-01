@@ -287,6 +287,27 @@
       canvasEl.addEventListener("touchcancel", end);
     },
 
+    fillCanvasBackground() {
+      const c = SignaturePad.canvas;
+      const ctx = SignaturePad.ctx;
+      if (!c || !ctx) return;
+      const rect = c.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.restore();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(ratio, ratio);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.strokeStyle = "#0f172a";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    },
+
     resize() {
       const c = SignaturePad.canvas;
       if (!c) return;
@@ -294,13 +315,7 @@
       const ratio = window.devicePixelRatio || 1;
       c.width = rect.width * ratio;
       c.height = rect.height * ratio;
-      const ctx = SignaturePad.ctx;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.scale(ratio, ratio);
-      ctx.strokeStyle = "#0f172a";
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
+      SignaturePad.fillCanvasBackground();
       SignaturePad.hasStroke = false;
     },
 
@@ -314,7 +329,17 @@
     clear() {
       const c = SignaturePad.canvas;
       if (!c || !SignaturePad.ctx) return;
-      SignaturePad.ctx.clearRect(0, 0, c.width, c.height);
+      const rect = c.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const ctx = SignaturePad.ctx;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(ratio, ratio);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.strokeStyle = "#0f172a";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
       SignaturePad.hasStroke = false;
       StaffApp.validateSubmitButton();
     },
