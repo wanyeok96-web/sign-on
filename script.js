@@ -741,20 +741,8 @@
         if (eventHint) {
           eventHint.textContent =
             dayEvents.length === 1
-              ? "이 날짜에 연수 1건 · 체크 후 다음 단계로"
-              : `이 날짜에 연수 ${dayEvents.length}건 · 서명할 항목을 체크하세요`;
-        }
-        const openOnly = dayEvents.filter((ev) => ev.status !== "마감");
-        if (openOnly.length === 1) {
-          const listEl = document.getElementById("staffEventChecklist");
-          const cb = listEl?.querySelector(
-            `input[type="checkbox"][value="${CSS.escape(String(openOnly[0].eventId))}"]`
-          );
-          if (cb) {
-            cb.checked = true;
-            StaffApp.onEventChecklistChange();
-            return;
-          }
+              ? "이 날짜에 연수 1건 · 서명할 연수를 직접 체크해 주세요"
+              : `이 날짜에 연수 ${dayEvents.length}건 · 서명할 항목을 직접 체크하세요`;
         }
       }
 
