@@ -371,7 +371,9 @@
     },
 
     STAFF_STEP_IDS: ["staffStep1", "staffStep2", "staffStep3", "staffStep4", "staffStep5"],
-    _lastVisibleStaffStep: 1,
+    _lastVisibleStaffStep: 0,
+    /** 학교 코드 확인 후 true — 확인 전에는 스텝 카드 전부 숨김 */
+    _schoolFlowStarted: false,
 
     init() {
       // 학교명 히어로 표시는 사용하지 않음
@@ -402,25 +404,31 @@
         if (e.key === "Enter") StaffApp.unlockSchool();
       });
 
+      StaffApp._schoolFlowStarted = false;
+      if (AppConfig.hasSchoolGate()) {
+        AppConfig.setActiveSchoolId("");
+      }
       StaffApp.applySchoolGateState();
       AppConfig.updateHeroCurrentSchool();
-      StaffApp._lastVisibleStaffStep = 0;
-      StaffApp.refreshStaffSteps();
     },
+
+    applySchoolGateState() {
       const gateCard = document.getElementById("staffSchoolGate");
       const msgEl = document.getElementById("staffSchoolMessage");
       const dateSel = document.getElementById("staffDateSelect");
 
       if (!AppConfig.hasSchoolGate()) {
         if (gateCard) gateCard.hidden = true;
+        StaffApp._schoolFlowStarted = true;
+        StaffApp.setStaffStepsLocked(false);
         StaffApp.loadEvents();
         return;
       }
 
-      // 학교별 설정을 쓰는 경우: 비밀번호로 학교를 선택하기 전에는 목록을 불러오지 않음
-      if (!AppConfig.activeSchoolId) {
+      // 학교 코드 확인 전: 학교 선택 카드만 표시
+      if (!StaffApp._schoolFlowStarted) {
         if (gateCard) gateCard.hidden = false;
-        StaffApp.setStaffStepsLocked(true);
+        StaffApp.hideAllStaffSteps();
         UI.setMessage(msgEl, "");
         if (dateSel) {
           dateSel.innerHTML = '<option value="">학교 코드를 먼저 입력해 주세요</option>';
@@ -436,17 +444,23 @@
       StaffApp.loadEvents();
     },
 
-    setStaffStepsLocked(locked) {
+    hideAllStaffSteps() {
       StaffApp.STAFF_STEP_IDS.forEach((id) => {
         const card = document.getElementById(id);
         if (!card) return;
-        if (locked) {
-          card.hidden = true;
-          card.classList.remove("is-active", "is-complete", "is-step-enter");
-        }
+        card.hidden = true;
+        card.classList.remove("is-active", "is-complete", "is-step-enter");
+        card.querySelector(".step-badge")?.classList.remove("is-complete");
       });
+    },
 
-      if (!locked) {
+    setStaffStepsLocked(locked) {
+      const flowBlocked = AppConfig.hasSchoolGate() && !StaffApp._schoolFlowStarted;
+      const inputsLocked = locked || flowBlocked;
+
+      if (locked || flowBlocked) {
+        StaffApp.hideAllStaffSteps();
+      } else {
         StaffApp._lastVisibleStaffStep = 0;
         StaffApp.refreshStaffSteps();
       }
@@ -458,30 +472,53 @@
       const deptSel = document.getElementById("staffDeptSelect");
       const nameSel = document.getElementById("staffNameSelect");
       const submitBtn = document.getElementById("btnStaffSubmit");
-      if (dateSel) dateSel.disabled = !!locked;
+      if (dateSel) dateSel.disabled = inputsLocked;
       if (checklist) {
         checklist.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-          cb.disabled = !!locked;
+          cb.disabled = inputsLocked;
         });
       }
-      if (selectAllBtn) selectAllBtn.disabled = !!locked;
-      if (deptSel) deptSel.disabled = !!locked;
-      if (nameSel) nameSel.disabled = !!locked;
+      if (selectAllBtn) selectAllBtn.disabled = inputsLocked;
+      if (deptSel) deptSel.disabled = inputsLocked;
+      if (nameSel) nameSel.disabled = inputsLocked;
       if (submitBtn) submitBtn.disabled = true;
 
       const canvas = document.getElementById("signatureCanvas");
       const clearBtn = document.getElementById("btnClearSignature");
-      if (canvas) canvas.style.pointerEvents = locked ? "none" : "";
-      if (clearBtn) clearBtn.style.pointerEvents = locked ? "none" : "";
+      if (canvas) canvas.style.pointerEvents = inputsLocked ? "none" : "";
+      if (clearBtn) clearBtn.style.pointerEvents = inputsLocked ? "none" : "";
 
-      // 카드가 hidden(display:none) 상태에서 캔버스를 초기화하면 크기(0)가 잡혀
-      // 서명이 입력돼도 인식이 안 되는 경우가 있어, 잠금 해제 후 리사이즈를 한 번 더 수행.
-      if (!locked) {
+      if (!inputsLocked) {
         requestAnimationFrame(() => SignaturePad.resize());
       }
     },
 
-    unlockSchool() {
+    resetStaffFormState() {
+      StaffApp.state = {
+        selectedDate: "",
+        eventIds: [],
+        department: "",
+        staffId: "",
+        staffKey: "",
+        name: "",
+        position: "",
+      };
+      StaffApp._lastVisibleStaffStep = 0;
+      SignaturePad.clear();
+      UI.closeModal("staffSuccessModal");
+      UI.closeModal("confirmModal");
+      UI.closeModal("overwriteModal");
+      StaffApp.resetDeptName();
+
+      const dateSel = document.getElementById("staffDateSelect");
+      if (dateSel) dateSel.value = "";
+      StaffApp.renderEventChecklist([]);
+
+      const eventHint = document.getElementById("staffEventHint");
+      if (eventHint) eventHint.textContent = "";
+    },
+
+    async unlockSchool() {
       const msgEl = document.getElementById("staffSchoolMessage");
       const pw = document.getElementById("staffSchoolPassword")?.value || "";
       const school = AppConfig.setSchoolByPassword(pw);
@@ -490,12 +527,22 @@
         return;
       }
       UI.setMessage(msgEl, "");
-      // 학교가 바뀌면 관리자 토큰은 무효화
       Api.setAdminToken("");
+
+      StaffApp._schoolFlowStarted = true;
+      StaffApp.resetStaffFormState();
+
+      const gateCard = document.getElementById("staffSchoolGate");
+      if (gateCard) gateCard.hidden = true;
+
+      await StaffApp.loadEvents();
       StaffApp.setStaffStepsLocked(false);
-      StaffApp.resetFlow();
-      StaffApp.applySchoolGateState();
+      StaffApp.validateSubmitButton();
       AppConfig.updateHeroCurrentSchool();
+
+      requestAnimationFrame(() => {
+        document.getElementById("staffStep1")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     },
 
     getEventDatesSorted() {
@@ -523,7 +570,7 @@
       const dateSel = document.getElementById("staffDateSelect");
       const dateHint = document.getElementById("staffDateHint");
       try {
-        if (AppConfig.hasSchoolGate() && !AppConfig.activeSchoolId) return;
+        if (AppConfig.hasSchoolGate() && (!AppConfig.activeSchoolId || !StaffApp._schoolFlowStarted)) return;
         const events = await UI.withLoading(() => Api.call("getEvents"), "연수 목록 불러오는 중…");
         StaffApp.events = events || [];
 
@@ -799,6 +846,11 @@
 
     /** 이전 스텝 완료 시에만 다음 스텝 카드를 표시 */
     refreshStaffSteps() {
+      if (AppConfig.hasSchoolGate() && !StaffApp._schoolFlowStarted) {
+        StaffApp.hideAllStaffSteps();
+        return;
+      }
+
       const completed = {
         1: !!StaffApp.state.selectedDate,
         2: StaffApp.state.eventIds.length > 0,
@@ -960,20 +1012,23 @@
       const keepDate = options.keepDate === true;
       const prevDate = keepDate ? StaffApp.state.selectedDate : "";
 
-      StaffApp.state = {
-        selectedDate: "",
-        eventIds: [],
-        department: "",
-        staffId: "",
-        staffKey: "",
-        name: "",
-        position: "",
-      };
+      if (keepDate) {
+        StaffApp.state.eventIds = [];
+        StaffApp.state.department = "";
+        StaffApp.state.staffId = "";
+        StaffApp.state.staffKey = "";
+        StaffApp.state.name = "";
+        StaffApp.state.position = "";
+        StaffApp._lastVisibleStaffStep = 0;
+        SignaturePad.clear();
+        UI.closeModal("staffSuccessModal");
+        StaffApp.resetDeptName();
+      } else {
+        StaffApp.resetStaffFormState();
+      }
+
       const successDetail = document.getElementById("staffSuccessModalDetail");
       if (successDetail) successDetail.textContent = "감사합니다. 창을 닫으셔도 됩니다.";
-      SignaturePad.clear();
-      UI.closeModal("staffSuccessModal");
-      StaffApp.resetDeptName();
       await StaffApp.loadEvents();
 
       const dateSel = document.getElementById("staffDateSelect");

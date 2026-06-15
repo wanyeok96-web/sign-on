@@ -23,13 +23,31 @@
   --radius-lg: 16px;
 
   --admin-accent: #1e3a5f;
-  --admin-bg: #f8fafc;
+  --admin-bg: transparent;
+
+  /* 페이지 배경 기준색 (민트~슬레이트 중간 톤) */
+  --page-base: #f3f9f8;
 }
 
 * { box-sizing: border-box; }
 
 html {
   color-scheme: light;
+  min-height: 100%;
+  background-color: var(--page-base);
+}
+
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--page-base);
+  background-image:
+    radial-gradient(ellipse 140% 90% at 8% -15%, rgba(94, 234, 212, 0.26), transparent 58%),
+    radial-gradient(ellipse 120% 75% at 100% 0%, rgba(45, 212, 191, 0.18), transparent 52%),
+    radial-gradient(ellipse 100% 70% at 50% 105%, rgba(148, 163, 184, 0.07), transparent 55%);
 }
 
 html, body { height: 100%; margin: 0; }
@@ -38,9 +56,8 @@ body {
   color: var(--ink-600);
   font-family: "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   letter-spacing: -0.01em;
-  background:
-    radial-gradient(900px 500px at 15% 0%, rgba(94, 234, 212, 0.28), transparent 55%),
-    linear-gradient(180deg, var(--mint-30) 0%, #f8fafc 100%);
+  min-height: 100%;
+  background: transparent;
 }
 
 button, input, select, textarea {
@@ -666,11 +683,11 @@ textarea {
   color: var(--ink-800);
 }
 
-/* ── 관리자 영역 (톤 구분) ── */
+/* ── 관리자 영역 (톤 구분 — 배경은 페이지와 동일하게) ── */
 .admin-panel {
-  background: var(--admin-bg);
-  border-radius: var(--radius-2xl);
-  padding: 4px;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
 }
 
 .admin-kicker { color: var(--admin-accent); }
