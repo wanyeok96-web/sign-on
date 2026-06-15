@@ -826,10 +826,10 @@
 
     validateSubmitButton() {
       const btn = document.getElementById("btnStaffSubmit");
-      // 서명 입력 감지는 기기별 이벤트 차이가 있어,
-      // 버튼 활성화는 선택 상태(연수/이름) 기준으로 처리하고
-      // 실제 서명 누락 여부는 제출 시점(onSubmitClick)에서 검증한다.
-      const ok = StaffApp.state.eventIds.length > 0 && StaffApp.state.staffKey;
+      const ok =
+        StaffApp.state.eventIds.length > 0 &&
+        StaffApp.state.staffKey &&
+        !SignaturePad.isEmpty();
       if (btn) btn.disabled = !ok;
     },
 
