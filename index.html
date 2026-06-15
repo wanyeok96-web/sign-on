@@ -95,7 +95,7 @@
         </section>
 
         <!-- STEP 2: 연수/회의 다중 선택 -->
-        <section class="form-card" id="staffStep2" data-step="2">
+        <section class="form-card" id="staffStep2" data-step="2" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 2</p>
@@ -124,7 +124,7 @@
         </section>
 
         <!-- STEP 3: 부서 -->
-        <section class="form-card" id="staffStep3" data-step="3">
+        <section class="form-card" id="staffStep3" data-step="3" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 3</p>
@@ -144,7 +144,7 @@
         </section>
 
         <!-- STEP 4: 이름 -->
-        <section class="form-card" id="staffStep4" data-step="4">
+        <section class="form-card" id="staffStep4" data-step="4" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 4</p>
@@ -164,7 +164,7 @@
         </section>
 
         <!-- STEP 5: 서명 -->
-        <section class="form-card" id="staffStep5" data-step="5">
+        <section class="form-card" id="staffStep5" data-step="5" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 5</p>
@@ -370,7 +370,7 @@
             <div class="table-wrap">
               <table class="data-table">
                 <thead>
-                  <tr><th>부서</th><th>이름</th><th>제출 시간</th><th>서명</th></tr>
+                  <tr><th>부서</th><th>이름</th><th>제출 시간</th><th>서명</th><th aria-label="삭제"></th></tr>
                 </thead>
                 <tbody id="adminSignedTableBody"></tbody>
               </table>

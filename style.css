@@ -221,6 +221,25 @@ body.view-admin .main-nav__tab[data-view="admin"].is-active {
   min-height: 190px;
 }
 
+.form-card[data-step][hidden] {
+  display: none !important;
+}
+
+.form-card.is-step-enter {
+  animation: staff-step-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes staff-step-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .form-card.is-active {
   border-color: rgba(20,184,166,0.38);
 }
@@ -1051,6 +1070,14 @@ input[type="file"] {
 
 .icon-btn:hover {
   background: #fef2f2;
+}
+
+.icon-btn--xs {
+  width: 32px;
+  height: 32px;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 700;
 }
 
 /* 테이블 액션 버튼 줄바꿈/깨짐 방지 */

@@ -371,6 +371,7 @@
     },
 
     STAFF_STEP_IDS: ["staffStep1", "staffStep2", "staffStep3", "staffStep4", "staffStep5"],
+    _lastVisibleStaffStep: 1,
 
     init() {
       // 학교명 히어로 표시는 사용하지 않음
@@ -403,9 +404,9 @@
 
       StaffApp.applySchoolGateState();
       AppConfig.updateHeroCurrentSchool();
+      StaffApp._lastVisibleStaffStep = 0;
+      StaffApp.refreshStaffSteps();
     },
-
-    applySchoolGateState() {
       const gateCard = document.getElementById("staffSchoolGate");
       const msgEl = document.getElementById("staffSchoolMessage");
       const dateSel = document.getElementById("staffDateSelect");
@@ -441,12 +442,14 @@
         if (!card) return;
         if (locked) {
           card.hidden = true;
-          card.classList.remove("is-active");
-          card.classList.remove("is-complete");
-        } else {
-          card.hidden = false;
+          card.classList.remove("is-active", "is-complete", "is-step-enter");
         }
       });
+
+      if (!locked) {
+        StaffApp._lastVisibleStaffStep = 0;
+        StaffApp.refreshStaffSteps();
+      }
 
       // 입력/버튼들도 잠금 (사용자 조작 방지)
       const dateSel = document.getElementById("staffDateSelect");
@@ -543,6 +546,7 @@
         }
 
         StaffApp.renderEventChecklist([]);
+        StaffApp.refreshStaffSteps();
       } catch (err) {
         dateSel.innerHTML = '<option value="">목록을 불러올 수 없습니다</option>';
         dateSel.disabled = true;
@@ -636,7 +640,7 @@
       StaffApp.state.department = "";
       StaffApp.state.staffId = "";
       StaffApp.state.staffKey = "";
-      StaffApp.markStep(2, ids.length > 0);
+      StaffApp.refreshStaffSteps();
 
       const btn = document.getElementById("btnStaffSelectAllEvents");
       const list = document.getElementById("staffEventChecklist");
@@ -671,13 +675,12 @@
       StaffApp.state.department = "";
       StaffApp.state.staffId = "";
       StaffApp.state.staffKey = "";
-      StaffApp.markStep(1, !!dateSel.value);
+      StaffApp.refreshStaffSteps();
       StaffApp.resetDeptName();
 
       if (!dateSel.value) {
         StaffApp.renderEventChecklist([]);
         if (eventHint) eventHint.textContent = "";
-        StaffApp.markStep(2, false);
         return;
       }
 
@@ -707,7 +710,7 @@
         }
       }
 
-      StaffApp.markStep(2, false);
+      StaffApp.refreshStaffSteps();
     },
 
     async loadStaffForSelectedEvents() {
@@ -732,10 +735,10 @@
           o.textContent = d;
           deptSel.appendChild(o);
         });
-        StaffApp.markStep(3, false);
         if (depts.length === 0) {
           UI.toastMsg("선택한 연수 모두에 참여 대상으로 등록된 교직원만 서명할 수 있습니다.", true);
         }
+        StaffApp.refreshStaffSteps();
       } catch (err) {
         UI.toastMsg(err.message, true);
       }
@@ -750,8 +753,7 @@
       nameSel.innerHTML = '<option value="">이름을 선택해 주세요</option>';
       if (!dept) {
         nameSel.disabled = true;
-        StaffApp.markStep(3, false);
-        StaffApp.markStep(4, false);
+        StaffApp.refreshStaffSteps();
         StaffApp.validateSubmitButton();
         return;
       }
@@ -764,8 +766,7 @@
         nameSel.appendChild(o);
       });
       nameSel.disabled = false;
-      StaffApp.markStep(3, true);
-      StaffApp.markStep(4, false);
+      StaffApp.refreshStaffSteps();
       StaffApp.validateSubmitButton();
     },
 
@@ -779,16 +780,11 @@
         StaffApp.state.name = s.name;
         StaffApp.state.position = s.position || "";
         StaffApp.selectedStaff = s;
-        StaffApp.markStep(4, true);
-        StaffApp.markStep(5, false);
-        // STEP 5가 실제로 보이는 시점에 캔버스 크기 보정
-        requestAnimationFrame(() => SignaturePad.resize());
       } else {
         StaffApp.state.staffId = "";
         StaffApp.state.staffKey = "";
-        StaffApp.markStep(4, false);
-        StaffApp.markStep(5, false);
       }
+      StaffApp.refreshStaffSteps();
       StaffApp.validateSubmitButton();
     },
 
@@ -801,27 +797,51 @@
       nameSel.disabled = true;
     },
 
-    markStep(num, complete) {
-      const card = document.getElementById(`staffStep${num}`);
-      const badge = card?.querySelector(".step-badge");
-      if (complete) {
-        card?.classList.add("is-complete");
-        card?.classList.remove("is-active");
-        badge?.classList.add("is-complete");
-      } else if (num === 1 || StaffApp.isStepReachable(num)) {
-        card?.classList.add("is-active");
-        card?.classList.remove("is-complete");
-        badge?.classList.remove("is-complete");
-      }
-    },
+    /** 이전 스텝 완료 시에만 다음 스텝 카드를 표시 */
+    refreshStaffSteps() {
+      const completed = {
+        1: !!StaffApp.state.selectedDate,
+        2: StaffApp.state.eventIds.length > 0,
+        3: !!StaffApp.state.department,
+        4: !!StaffApp.state.staffKey,
+      };
 
-    isStepReachable(num) {
-      if (num <= 1) return true;
-      if (num === 2) return !!StaffApp.state.selectedDate;
-      if (num === 3) return StaffApp.state.eventIds.length > 0;
-      if (num === 4) return !!StaffApp.state.department;
-      if (num === 5) return !!StaffApp.state.staffKey;
-      return false;
+      let lastVisible = 1;
+      if (completed[1]) lastVisible = 2;
+      if (completed[1] && completed[2]) lastVisible = 3;
+      if (completed[1] && completed[2] && completed[3]) lastVisible = 4;
+      if (completed[1] && completed[2] && completed[3] && completed[4]) lastVisible = 5;
+
+      const stepRevealed = lastVisible > StaffApp._lastVisibleStaffStep;
+      StaffApp._lastVisibleStaffStep = lastVisible;
+
+      StaffApp.STAFF_STEP_IDS.forEach((id, index) => {
+        const n = index + 1;
+        const card = document.getElementById(id);
+        if (!card) return;
+
+        const badge = card.querySelector(".step-badge");
+        const visible = n <= lastVisible;
+        const complete = !!completed[n];
+        const active = visible && n === lastVisible && !complete;
+
+        card.hidden = !visible;
+        card.classList.toggle("is-complete", complete);
+        card.classList.toggle("is-active", active);
+        badge?.classList.toggle("is-complete", complete);
+
+        card.classList.remove("is-step-enter");
+        if (visible && n === lastVisible && stepRevealed) {
+          card.classList.add("is-step-enter");
+        }
+      });
+
+      if (lastVisible === 5 && completed[4]) {
+        requestAnimationFrame(() => SignaturePad.resize());
+      } else if (stepRevealed && lastVisible < 5) {
+        const card = document.getElementById(`staffStep${lastVisible}`);
+        card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
     },
 
     validateSubmitButton() {
@@ -960,22 +980,12 @@
       if (keepDate && prevDate && dateSel) {
         dateSel.value = prevDate;
         StaffApp.onDateChange();
-        StaffApp.markStep(1, true);
-        StaffApp.markStep(2, false);
       } else if (dateSel) {
         dateSel.value = "";
       }
 
-      StaffApp.STAFF_STEP_IDS.forEach((id, i) => {
-        const card = document.getElementById(id);
-        const activeIndex = keepDate && prevDate ? 1 : 0;
-        card?.classList.toggle("is-active", i === activeIndex);
-        card?.classList.remove("is-complete");
-        card?.querySelector(".step-badge")?.classList.remove("is-complete");
-      });
-      if (keepDate && prevDate) {
-        StaffApp.markStep(1, true);
-      }
+      StaffApp._lastVisibleStaffStep = 0;
+      StaffApp.refreshStaffSteps();
       StaffApp.validateSubmitButton();
     },
   };
@@ -1044,6 +1054,9 @@
       });
 
       document.getElementById("adminStatusEventSelect")?.addEventListener("change", AdminApp.loadStatus);
+      document
+        .getElementById("adminSignedTableBody")
+        ?.addEventListener("click", AdminApp.onSignedTableClick);
       document.getElementById("btnLoadPrint")?.addEventListener("click", AdminApp.loadPrint);
       document.getElementById("btnPrintRegister")?.addEventListener("click", () => window.print());
 
@@ -1779,6 +1792,48 @@
       });
     },
 
+    onSignedTableClick(e) {
+      const btn = e.target.closest("[data-action='delete-signature']");
+      if (!btn) return;
+      AdminApp.deleteSignature({
+        staffId: btn.dataset.staffId || "",
+        department: btn.dataset.department || "",
+        name: btn.dataset.name || "",
+      });
+    },
+
+    async deleteSignature(target) {
+      const eventId = document.getElementById("adminStatusEventSelect")?.value;
+      if (!eventId) {
+        UI.toastMsg("연수를 먼저 선택해 주세요.", true);
+        return;
+      }
+      const label = `${target.department} ${target.name}`.trim();
+      if (!confirm(`${label} 선생님의 서명을 삭제하시겠습니까?\n삭제 후에는 미서명자로 표시됩니다.`)) {
+        return;
+      }
+      try {
+        await UI.withLoading(
+          () =>
+            Api.call(
+              "deleteSignature",
+              {
+                eventId,
+                staffId: target.staffId,
+                department: target.department,
+                name: target.name,
+              },
+              true
+            ),
+          "삭제 중…"
+        );
+        UI.toastMsg("서명이 삭제되었습니다.");
+        await AdminApp.loadStatus();
+      } catch (err) {
+        UI.toastMsg(err.message, true);
+      }
+    },
+
     async loadStatus() {
       const eventId = document.getElementById("adminStatusEventSelect").value;
       if (!eventId) return;
@@ -1801,6 +1856,13 @@
             <td>${escapeHtml(r.name)}</td>
             <td>${escapeHtml(r.timestamp || "")}</td>
             <td><img class="sig-thumb" src="${r.signatureData}" alt="서명" /></td>
+            <td>
+              <button type="button" class="icon-btn icon-btn--xs" data-action="delete-signature"
+                data-staff-id="${escapeHtml(r.staffId || "")}"
+                data-department="${escapeHtml(r.department)}"
+                data-name="${escapeHtml(r.name)}"
+                aria-label="${escapeHtml(r.department)} ${escapeHtml(r.name)} 서명 삭제">×</button>
+            </td>
           `;
           signedBody.appendChild(tr);
         });

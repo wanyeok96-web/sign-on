@@ -19,8 +19,7 @@ window.SCHOOL_CONFIG = {
    */
 
   gasWebAppUrl:
-
-    "https://script.google.com/macros/s/AKfycbzAurOHy6egYXbVIpNjV383nF5Sw4aY831LuWfjjGBFd844ZEyKyC4mAyl03ygo1DMJ/exec",
+    "https://script.google.com/macros/s/AKfycbxzQOZx3yJ9fif8uw3cRcFt74HkIUFU0vLT2YbcjZXEMJyx0WS6JeI6a51CU-_1kbDD/exec",
 
 
 

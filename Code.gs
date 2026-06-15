@@ -102,6 +102,7 @@ function handleRequest_(e) {
       "deleteStaff",
       "getSignatureStatus",
       "getPrintableRegister",
+      "deleteSignature",
     ];
 
     if (adminActions.indexOf(action) >= 0 && action !== "loginAdmin") {
@@ -166,6 +167,9 @@ function handleRequest_(e) {
         break;
       case "getPrintableRegister":
         data = getPrintableRegister_(payload.eventId, schoolSuffix);
+        break;
+      case "deleteSignature":
+        data = deleteSignature_(payload, schoolSuffix);
         break;
       default:
         return jsonResponse_({ ok: false, message: "알 수 없는 action: " + action });
@@ -754,6 +758,7 @@ function getSignatureStatus_(eventId, schoolSuffix) {
     const rec = signedMap[key] || signedMap[altKey];
     if (rec) {
       signed.push({
+        staffId: String(rec.staffId || "").trim(),
         department: rec.department,
         name: rec.name,
         timestamp: String(rec.timestamp || ""),
@@ -775,6 +780,49 @@ function getSignatureStatus_(eventId, schoolSuffix) {
     signed: signed,
     unsigned: unsigned,
   };
+}
+
+/**
+ * 관리자: 특정 연수의 개별 서명 기록 삭제
+ */
+function deleteSignature_(payload, schoolSuffix) {
+  const eventId = String(payload.eventId || "").trim();
+  const staffId = String(payload.staffId || "").trim();
+  const department = String(payload.department || "").trim();
+  const name = String(payload.name || "").trim();
+
+  if (!eventId) throw new Error("eventId가 필요합니다.");
+  if (!staffId && (!department || !name)) {
+    throw new Error("삭제할 대상(부서·이름) 정보가 필요합니다.");
+  }
+
+  const sh = getSpreadsheet_().getSheetByName(getSheetSigs_(schoolSuffix));
+  if (!sh || sh.getLastRow() < 2) throw new Error("서명 기록을 찾을 수 없습니다.");
+
+  const data = sh.getDataRange().getValues();
+  const headers = data[0].map(String);
+  const eventCol = headers.indexOf("eventId");
+  const staffCol = headers.indexOf("staffId");
+  const deptCol = headers.indexOf("department");
+  const nameCol = headers.indexOf("name");
+  if (eventCol < 0) throw new Error("서명기록 시트 형식이 올바르지 않습니다.");
+
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][eventCol]) !== eventId) continue;
+
+    const rowStaffId = staffCol >= 0 ? String(data[i][staffCol] || "").trim() : "";
+    const rowDept = deptCol >= 0 ? String(data[i][deptCol] || "").trim() : "";
+    const rowName = nameCol >= 0 ? String(data[i][nameCol] || "").trim() : "";
+
+    const byStaffId = staffId && rowStaffId === staffId;
+    const byDeptName = department && name && rowDept === department && rowName === name;
+    if (!byStaffId && !byDeptName) continue;
+
+    sh.deleteRow(i + 1);
+    return { deleted: true };
+  }
+
+  throw new Error("서명 기록을 찾을 수 없습니다.");
 }
 
 function getPrintableRegister_(eventId, schoolSuffix) {
