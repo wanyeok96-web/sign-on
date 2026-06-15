@@ -378,7 +378,8 @@
     init() {
       // 학교명 히어로 표시는 사용하지 않음
 
-      SignaturePad.init(document.getElementById("signatureCanvas"));
+      const signatureCanvas = document.getElementById("signatureCanvas");
+      if (signatureCanvas) SignaturePad.init(signatureCanvas);
       document.getElementById("btnClearSignature")?.addEventListener("click", () => SignaturePad.clear());
 
       document.getElementById("staffDateSelect")?.addEventListener("change", StaffApp.onDateChange);
@@ -2020,20 +2021,39 @@
   /* ─────────────────────────────────────────
    * 뷰 전환 · 초기화
    * ───────────────────────────────────────── */
-  function initNavigation() {
+  function switchMainView(view) {
     const staffPanel = document.getElementById("staffPanel");
     const adminPanel = document.getElementById("adminPanel");
+    if (!staffPanel || !adminPanel) {
+      console.error("싸인온: staffPanel 또는 adminPanel을 찾을 수 없습니다.");
+      return;
+    }
 
+    const nextView = view === "admin" ? "admin" : "staff";
+
+    document.querySelectorAll(".main-nav__tab").forEach((t) => {
+      t.classList.toggle("is-active", t.dataset.view === nextView);
+      t.setAttribute("aria-selected", t.dataset.view === nextView ? "true" : "false");
+    });
+
+    document.body.classList.toggle("view-admin", nextView === "admin");
+    staffPanel.hidden = nextView !== "staff";
+    adminPanel.hidden = nextView !== "admin";
+
+    if (nextView === "admin" && typeof AdminApp !== "undefined") {
+      AdminApp.applySchoolGateState();
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function initNavigation() {
     document.querySelectorAll(".main-nav__tab").forEach((tab) => {
       tab.addEventListener("click", () => {
-        document.querySelectorAll(".main-nav__tab").forEach((t) => t.classList.remove("is-active"));
-        tab.classList.add("is-active");
-        const view = tab.dataset.view;
-        document.body.classList.toggle("view-admin", view === "admin");
-        staffPanel.hidden = view !== "staff";
-        adminPanel.hidden = view !== "admin";
+        switchMainView(tab.dataset.view || "staff");
       });
     });
+    switchMainView("staff");
   }
 
   function escapeHtml(str) {
@@ -2171,9 +2191,14 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    initNavigation();
-    StaffApp.init();
-    AdminApp.init();
-    AppConfig.updateHeroCurrentSchool();
+    try {
+      initNavigation();
+      StaffApp.init();
+      AdminApp.init();
+      AppConfig.updateHeroCurrentSchool();
+    } catch (err) {
+      console.error("싸인온 초기화 오류:", err);
+      UI?.toastMsg?.("페이지 초기화 중 오류가 발생했습니다. 새로고침해 주세요.", true);
+    }
   });
 })();

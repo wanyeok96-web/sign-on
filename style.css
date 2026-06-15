@@ -221,6 +221,12 @@ body.view-admin .main-nav__tab[data-view="admin"].is-active {
 /* ── 레이아웃 · 카드 ── */
 .panel[hidden] { display: none !important; }
 
+/* 메인 탭 전환 시 패널 표시 보장 */
+#staffPanel:not([hidden]),
+#adminPanel:not([hidden]) {
+  display: block;
+}
+
 .layout-single { max-width: 100%; }
 
 .form-stack { display: grid; gap: 24px; }
