@@ -279,6 +279,27 @@
     ctx: null,
     drawing: false,
     hasStroke: false,
+    _initialized: false,
+
+    ensureReady() {
+      const canvas = document.getElementById("signatureCanvas");
+      if (!canvas) return;
+      const card = document.getElementById("staffStep5");
+      if (!card || card.hidden) return;
+
+      if (!SignaturePad._initialized) {
+        SignaturePad.init(canvas);
+        SignaturePad._initialized = true;
+      }
+
+      canvas.style.pointerEvents = "auto";
+      const clearBtn = document.getElementById("btnClearSignature");
+      if (clearBtn) clearBtn.style.pointerEvents = "auto";
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => SignaturePad.resize());
+      });
+    },
 
     init(canvasEl) {
       SignaturePad.canvas = canvasEl;
@@ -345,11 +366,26 @@
       const c = SignaturePad.canvas;
       if (!c) return;
       const rect = c.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
       const ratio = window.devicePixelRatio || 1;
+      const hadStroke = SignaturePad.hasStroke;
+      const snapshot = hadStroke ? c.toDataURL("image/png") : "";
       c.width = rect.width * ratio;
       c.height = rect.height * ratio;
       SignaturePad.fillCanvasBackground();
-      SignaturePad.hasStroke = false;
+      if (hadStroke && snapshot) {
+        const img = new Image();
+        img.onload = function () {
+          const ctx = SignaturePad.ctx;
+          if (!ctx) return;
+          ctx.drawImage(img, 0, 0, rect.width, rect.height);
+          SignaturePad.hasStroke = true;
+          StaffApp.validateSubmitButton();
+        };
+        img.src = snapshot;
+      } else {
+        SignaturePad.hasStroke = false;
+      }
     },
 
     point(e) {
@@ -411,14 +447,6 @@
     _schoolFlowStarted: false,
 
     init() {
-      const signatureCanvas = document.getElementById("signatureCanvas");
-      if (signatureCanvas) {
-        try {
-          SignaturePad.init(signatureCanvas);
-        } catch (err) {
-          console.warn("서명 패드 초기화 실패:", err);
-        }
-      }
       document.getElementById("btnClearSignature")?.addEventListener("click", () => SignaturePad.clear());
 
       document.getElementById("staffDateSelect")?.addEventListener("change", StaffApp.onDateChange);
@@ -547,7 +575,7 @@
       if (clearBtn) clearBtn.style.pointerEvents = inputsLocked ? "none" : "";
 
       if (!inputsLocked) {
-        requestAnimationFrame(() => SignaturePad.resize());
+        requestAnimationFrame(() => SignaturePad.ensureReady());
       }
     },
 
@@ -1024,8 +1052,8 @@
         }
       });
 
-      if (lastVisible === 5 && completed[4]) {
-        requestAnimationFrame(() => SignaturePad.resize());
+      if (lastVisible === 5 && completed[4] && stepRevealed) {
+        SignaturePad.ensureReady();
       } else if (stepRevealed && lastVisible < 5) {
         const card = document.getElementById(`staffStep${lastVisible}`);
         card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1085,8 +1113,8 @@
         }
       });
 
-      if (lastVisible === 3 && completed[1] && completed[2]) {
-        requestAnimationFrame(() => SignaturePad.resize());
+      if (lastVisible === 3 && completed[1] && completed[2] && stepRevealed) {
+        SignaturePad.ensureReady();
       } else if (stepRevealed && lastVisible < 3) {
         const card = document.getElementById(StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1]);
         card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1095,7 +1123,18 @@
 
     afterSignatureChange() {
       StaffApp.validateSubmitButton();
-      if (AppConfig.isWorkshopMode()) StaffApp.refreshStaffSteps();
+      if (AppConfig.isWorkshopMode()) {
+        StaffApp.updateWorkshopSignatureBadge();
+      }
+    },
+
+    updateWorkshopSignatureBadge() {
+      const card = document.getElementById("staffStep5");
+      if (!card || card.hidden) return;
+      const badge = card.querySelector(".step-badge");
+      const signed = !SignaturePad.isEmpty();
+      card.classList.toggle("is-complete", signed);
+      badge?.classList.toggle("is-complete", signed);
     },
 
     validateSubmitButton() {
