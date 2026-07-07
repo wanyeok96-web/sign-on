@@ -377,11 +377,6 @@
       StaffApp.afterSignatureChange();
     },
 
-    afterSignatureChange() {
-      StaffApp.validateSubmitButton();
-      if (AppConfig.isWorkshopMode()) StaffApp.refreshStaffSteps();
-    },
-
     isEmpty() {
       return !SignaturePad.hasStroke;
     },
@@ -1096,6 +1091,11 @@
         const card = document.getElementById(StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1]);
         card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
+    },
+
+    afterSignatureChange() {
+      StaffApp.validateSubmitButton();
+      if (AppConfig.isWorkshopMode()) StaffApp.refreshStaffSteps();
     },
 
     validateSubmitButton() {
