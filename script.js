@@ -1352,22 +1352,8 @@
 
     applyWorkshopAdminLayout() {
       const workshop = AdminApp.isWorkshopAdmin();
-      document.querySelectorAll('[data-admin-scope="school"]').forEach((el) => {
-        el.hidden = workshop;
-      });
-      const statusField = document.getElementById("adminStatusEventField");
-      const printField = document.getElementById("adminPrintEventField");
       const wsHint = document.getElementById("adminWorkshopStatusHint");
-      if (statusField) statusField.hidden = false;
-      if (printField) printField.hidden = false;
-      if (wsHint) wsHint.hidden = !workshop;
-
-      const unsignedStat = document.querySelector(".status-stat--pending");
-      if (unsignedStat) unsignedStat.hidden = workshop;
-
-      const statLabels = document.querySelectorAll("#adminStatusSummary .status-stat__label");
-      if (statLabels[0]) statLabels[0].textContent = workshop ? "참가자" : "전체 대상";
-      if (statLabels[2]) statLabels[2].textContent = workshop ? "—" : "미서명";
+      if (wsHint) wsHint.hidden = true;
 
       const deptHeaders = document.querySelectorAll(
         "#adminSignedCard thead th:first-child, #adminUnsignedCard thead th:first-child"
@@ -1375,13 +1361,6 @@
       deptHeaders.forEach((th) => {
         th.textContent = workshop ? "학교" : "부서";
       });
-
-      const intro = document.getElementById("adminLoginIntro");
-      if (intro) {
-        intro.textContent = workshop
-          ? "연수용 관리자 화면입니다. 서명 현황과 등록부 출력을 이용하세요."
-          : "학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.";
-      }
     },
 
     init() {
@@ -1533,20 +1512,10 @@
       document.getElementById("adminLoginCard").hidden = true;
       document.getElementById("adminDashboard").hidden = false;
       AdminApp.applyWorkshopAdminLayout();
-      if (AdminApp.isWorkshopAdmin()) {
-        AdminApp.switchTab("status");
-      } else {
-        AdminApp.refreshAll();
-      }
+      AdminApp.refreshAll();
     },
 
     async refreshAll() {
-      if (AdminApp.isWorkshopAdmin()) {
-        await AdminApp.loadAdminEvents();
-        AdminApp.fillEventSelects();
-        AdminApp.switchTab("status");
-        return;
-      }
       await AdminApp.loadAdminEvents();
       await AdminApp.loadStaffTable();
       AdminApp.renderDeptPicker("adminEventDeptList", "adminEventDeptSelectAll", [], "all");
@@ -1554,9 +1523,6 @@
     },
 
     switchTab(tab) {
-      if (AdminApp.isWorkshopAdmin() && (tab === "events" || tab === "staff")) {
-        tab = "status";
-      }
       document.querySelectorAll(".admin-menu__item").forEach((b) => {
         b.classList.toggle("is-active", b.dataset.adminTab === tab);
       });
@@ -2198,7 +2164,6 @@
     },
 
     fillEventSelects() {
-      if (AdminApp.isWorkshopAdmin()) return;
       ["adminStatusEventSelect", "adminPrintEventSelect"].forEach((id) => {
         const sel = document.getElementById(id);
         if (!sel) return;
@@ -2229,9 +2194,7 @@
         return;
       }
       const label = `${target.department} ${target.name}`.trim();
-      const confirmMsg = AdminApp.isWorkshopAdmin()
-        ? `${label} 선생님의 서명을 삭제하시겠습니까?`
-        : `${label} 선생님의 서명을 삭제하시겠습니까?\n삭제 후에는 미서명자로 표시됩니다.`;
+      const confirmMsg = `${label} 선생님의 서명을 삭제하시겠습니까?\n삭제 후에는 미서명자로 표시됩니다.`;
       if (!confirm(confirmMsg)) {
         return;
       }
@@ -2265,7 +2228,6 @@
           () => Api.call("getSignatureStatus", { eventId }, true),
           "현황 불러오는 중…"
         );
-        const workshop = AdminApp.isWorkshopAdmin();
         document.getElementById("adminStatusSummary").hidden = false;
         document.getElementById("statTotal").textContent = data.total;
         document.getElementById("statSigned").textContent = data.signedCount;
@@ -2294,18 +2256,16 @@
 
         const unsignedBody = document.getElementById("adminUnsignedTableBody");
         unsignedBody.innerHTML = "";
-        if (!workshop) {
-          (data.unsigned || []).forEach((r) => {
-            const tr = document.createElement("tr");
-            tr.innerHTML = `
+        (data.unsigned || []).forEach((r) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
             <td>${escapeHtml(r.department)}</td>
             <td>${escapeHtml(r.name)}</td>
             <td>${escapeHtml(r.position || "")}</td>
           `;
-            unsignedBody.appendChild(tr);
-          });
-        }
-        document.getElementById("adminUnsignedCard").hidden = workshop || !(data.unsigned || []).length;
+          unsignedBody.appendChild(tr);
+        });
+        document.getElementById("adminUnsignedCard").hidden = !(data.unsigned || []).length;
       } catch (err) {
         UI.toastMsg(err.message, true);
       }
@@ -2348,14 +2308,12 @@
       const unsignedCount = Math.max(0, rows.length - signedCount);
       const summaryEl = document.getElementById("printSignatureSummary");
       if (summaryEl) {
-        summaryEl.textContent = data.workshopMode
-          ? `참가 ${rows.length}명`
-          : `총 ${rows.length}명 · 서명 ${signedCount}명 · 미서명 ${unsignedCount}명`;
+        summaryEl.textContent = `총 ${rows.length}명 · 서명 ${signedCount}명 · 미서명 ${unsignedCount}명`;
       }
 
       document.querySelectorAll("#printRegisterArea thead th").forEach((th) => {
-        if (th.textContent.trim() === "부서") {
-          th.textContent = data.workshopMode ? "학교" : "부서";
+        if (th.textContent.trim() === "부서" || th.textContent.trim() === "학교") {
+          th.textContent = AdminApp.isWorkshopAdmin() ? "학교" : "부서";
         }
       });
 
@@ -2376,12 +2334,8 @@
       }
 
       document.getElementById("printAttendeeCount").textContent = `${rows.length} 명`;
-      document.getElementById("printSignedCount").textContent = data.workshopMode
-        ? `${rows.length} 명`
-        : `${signedCount} 명`;
-      document.getElementById("printUnsignedCount").textContent = data.workshopMode
-        ? "-"
-        : `${unsignedCount} 명`;
+      document.getElementById("printSignedCount").textContent = `${signedCount} 명`;
+      document.getElementById("printUnsignedCount").textContent = `${unsignedCount} 명`;
     },
 
     renderPrintRowCells(row, num) {

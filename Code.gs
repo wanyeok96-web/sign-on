@@ -810,35 +810,6 @@ function submitSignature_(payload, schoolSuffix) {
 }
 
 function getSignatureStatus_(eventId, schoolSuffix) {
-  if (isWorkshopSuffix_(schoolSuffix)) {
-    const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter(function (s) {
-      return String(s.eventId) === String(eventId);
-    });
-    const signed = sigs.map(function (rec) {
-      return {
-        staffId: String(rec.staffId || "").trim(),
-        department: rec.department,
-        name: rec.name,
-        timestamp: String(rec.timestamp || ""),
-        signatureData: String(rec.signatureData || ""),
-      };
-    });
-    signed.sort(function (a, b) {
-      const da = String(a.department || "");
-      const db = String(b.department || "");
-      if (da !== db) return da.localeCompare(db, "ko");
-      return String(a.name || "").localeCompare(String(b.name || ""), "ko");
-    });
-    return {
-      total: signed.length,
-      signedCount: signed.length,
-      unsignedCount: 0,
-      signed: signed,
-      unsigned: [],
-      workshopMode: true,
-    };
-  }
-
   const targets = getStaffForEvent_(eventId, schoolSuffix);
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
 
@@ -927,37 +898,6 @@ function deleteSignature_(payload, schoolSuffix) {
 function getPrintableRegister_(eventId, schoolSuffix) {
   const ev = getEventById_(eventId, schoolSuffix);
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
-
-  if (isWorkshopSuffix_(schoolSuffix)) {
-    const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter(function (s) {
-      return String(s.eventId) === String(eventId);
-    });
-    sigs.sort(function (a, b) {
-      const da = String(a.department || "");
-      const db = String(b.department || "");
-      if (da !== db) return da.localeCompare(db, "ko");
-      return String(a.name || "").localeCompare(String(b.name || ""), "ko");
-    });
-    const rows = sigs.map(function (s) {
-      return {
-        department: s.department,
-        name: s.name,
-        position: "",
-        staffRank: "",
-        remarks: "",
-        signatureData: String(s.signatureData || ""),
-        timestamp: String(s.timestamp || ""),
-      };
-    });
-    return {
-      title: ev.title,
-      date: ev.date,
-      location: ev.location,
-      description: ev.description,
-      rows: rows,
-      workshopMode: true,
-    };
-  }
 
   const targets = getStaffForEvent_(eventId, schoolSuffix);
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));

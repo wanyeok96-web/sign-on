@@ -9,7 +9,7 @@ window.SCHOOL_CONFIG = {
    * 학교 추가 시 URL을 새로 만들 필요 없음 — sheetSuffix로 탭만 구분
    */
   gasWebAppUrl:
-    "https://script.google.com/macros/s/AKfycbzP45lHSehIC0PFCf5OP87_NKlkVmgEWiTH9qzxezxxXDHRaQl4jrYYmIgmfdTGvvJ9/exec",
+    "https://script.google.com/macros/s/AKfycby2M2yHOqvEcS0tGldePV8MbnCQ9gajsy4uCIhufxVyiLBfPtDmnreCVEnGZ6GWavPT/exec",
 
   schools: [
     {
