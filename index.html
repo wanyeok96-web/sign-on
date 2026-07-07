@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <meta name="description" content="싸인온 Sign-On — 교직원 회의·연수 온라인 서명 등록부" />
+  <title>싸인온 Sign-On</title>
+  <!-- GitHub Pages: 상대 경로(script.js 등)가 깨지지 않도록 base 자동 설정 -->
+  <script>
+    (function () {
+      var host = location.hostname || "";
+      if (!/github\.io$/i.test(host)) return;
+
+      var parts = location.pathname.replace(/^\//, "").split("/").filter(Boolean);
+      if (parts.length && /\.html?$/i.test(parts[parts.length - 1])) parts.pop();
+
+      // /저장소명 → /저장소명/ 로 정규화 (상대 경로 404 방지)
+      if (parts.length === 1 && !location.pathname.endsWith("/")) {
+        location.replace("/" + parts[0] + "/" + location.search + location.hash);
+        return;
+      }
+
+      if (parts.length) {
+        var base = document.createElement("base");
+        base.href = "/" + parts.join("/") + "/";
+        document.head.appendChild(base);
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <p class="site-credit" aria-label="저작권">
+      © 2026 싸인온(Sign-On) <span class="site-credit__sep" aria-hidden="true">|</span> made by 경기 이솔고등학교 이왕혁
+    </p>
+
+    <!-- 히어로 -->
+    <header class="hero" aria-label="서비스 소개">
+      <div class="hero-blob hero-blob--1" aria-hidden="true"></div>
+      <div class="hero-blob hero-blob--2" aria-hidden="true"></div>
+      <p class="hero-badge">
+        <span class="icon-inline" aria-hidden="true">✍️</span>
+        교직원 온라인 등록부
+      </p>
+      <h1 class="hero-title">
+        <span class="hero-title__icon" aria-hidden="true">🏫</span>싸인온 <span class="title-accent">Sign-On</span><span class="hero-title__icon" aria-hidden="true">📝</span>
+      </h1>
+      <div class="hero-lede-group">
+        <p class="hero-lede" id="heroLedeMain">온라인에서 간편하게, 연수 등록부에 서명하세요.</p>
+        <p class="hero-lede hero-lede--sub" id="heroLedeSub">배움이 넘치는 연수가 되길 응원합니다!</p>
+      </div>
+      <p class="hero-mode-badge" id="heroModeBadge" hidden>연수용 서명 등록부</p>
+      <p class="hero-current-school" id="heroCurrentSchool" hidden>
+        <span class="hero-current-school__name" id="heroCurrentSchoolName"></span>
+      </p>
+    </header>
+
+    <!-- 교직원 / 관리자 구분 탭 -->
+    <nav class="main-nav" aria-label="페이지 선택">
+      <button type="button" class="main-nav__tab is-active" data-view="staff" id="navStaff">
+        교직원 서명
+      </button>
+      <button type="button" class="main-nav__tab" data-view="admin" id="navAdmin">
+        관리자
+      </button>
+    </nav>
+
+    <!-- 로딩 오버레이 -->
+    <div class="loading-overlay" id="loadingOverlay" hidden aria-live="polite">
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <p class="loading-text" id="loadingText">불러오는 중…</p>
+    </div>
+
+    <!-- ═══ 교직원 페이지 ═══ -->
+    <main class="panel layout-single" id="staffPanel" aria-label="교직원 서명">
+      <div class="form-stack" id="staffFormStack">
+        <!-- 학교 코드 -->
+        <section class="form-card form-card--solo staff-school-card" id="staffSchoolGate">
+          <p class="kicker">학교 선택</p>
+          <h2>학교 코드</h2>
+          <p class="muted">학교 코드에 따라 일반 학교 연수 또는 <strong>연수용 등록부(geo1234)</strong>로 이동합니다.</p>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffSchoolPassword">학교 코드</label>
+            <div class="input-wrap">
+              <input type="text" id="staffSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+            </div>
+          </div>
+          <div class="submit-block">
+            <button type="button" class="btn-primary" id="btnStaffSchoolUnlock">확인</button>
+            <p class="submit-message" id="staffSchoolMessage" role="status"></p>
+          </div>
+        </section>
+
+        <!-- 워크숍(geo1234): STEP 1 학교명 -->
+        <section class="form-card" id="staffWsStep1" data-step="1" data-flow="workshop" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 1</p>
+              <h2>학교명 입력</h2>
+              <p class="muted">소속 학교명을 입력해 주세요. (예: OO중, OO중학교)</p>
+            </div>
+            <span class="step-badge">1</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffFreeSchool">학교명</label>
+            <div class="input-wrap">
+              <input type="text" id="staffFreeSchool" placeholder="예: 수원중학교" autocomplete="organization" />
+            </div>
+            <p class="hint" id="staffFreeSchoolHint"></p>
+          </div>
+        </section>
+
+        <!-- 워크숍(geo1234): STEP 2 성함 -->
+        <section class="form-card" id="staffWsStep2" data-step="2" data-flow="workshop" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 2</p>
+              <h2>성함 입력</h2>
+            </div>
+            <span class="step-badge">2</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffFreeName">성함</label>
+            <div class="input-wrap">
+              <input type="text" id="staffFreeName" placeholder="실명 입력" autocomplete="name" />
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 1: 연수 일자 -->
+        <section class="form-card" id="staffStep1" data-step="1" data-flow="school" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 1</p>
+              <h2>연수 일자</h2>
+              <p class="muted">진행 중인 연수가 있는 날짜를 선택하세요.</p>
+            </div>
+            <span class="step-badge">1</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffDateSelect">날짜</label>
+            <div class="input-wrap">
+              <select id="staffDateSelect" aria-describedby="staffDateHint">
+                <option value="">불러오는 중…</option>
+              </select>
+            </div>
+            <p class="hint" id="staffDateHint"></p>
+          </div>
+        </section>
+
+        <!-- STEP 2: 연수/회의 다중 선택 -->
+        <section class="form-card" id="staffStep2" data-step="2" data-flow="school" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 2</p>
+              <h2>연수·회의 선택</h2>
+              <p class="muted">서명할 연수·회의를 체크하세요. 여러 개를 한 번에 서명할 수 있습니다.</p>
+            </div>
+            <span class="step-badge">2</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <div class="event-checklist-toolbar">
+              <span class="field__label" id="staffEventChecklistLabel">연수·회의 목록</span>
+              <button type="button" class="btn-text" id="btnStaffSelectAllEvents" hidden>전체 선택</button>
+            </div>
+            <div
+              class="event-checklist"
+              id="staffEventChecklist"
+              role="group"
+              aria-labelledby="staffEventChecklistLabel"
+              aria-describedby="staffEventHint"
+            >
+              <p class="event-checklist__empty muted">날짜를 먼저 선택해 주세요</p>
+            </div>
+            <p class="hint" id="staffEventHint"></p>
+          </div>
+        </section>
+
+        <!-- STEP 3: 부서 -->
+        <section class="form-card" id="staffStep3" data-step="3" data-flow="school" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 3</p>
+              <h2>부서 선택</h2>
+            </div>
+            <span class="step-badge">3</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffDeptSelect">부서</label>
+            <div class="input-wrap">
+              <select id="staffDeptSelect" disabled>
+                <option value="">연수를 먼저 선택해 주세요</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 4: 이름 -->
+        <section class="form-card" id="staffStep4" data-step="4" data-flow="school" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 4</p>
+              <h2>이름 선택</h2>
+            </div>
+            <span class="step-badge">4</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffNameSelect">이름</label>
+            <div class="input-wrap">
+              <select id="staffNameSelect" disabled>
+                <option value="">부서를 먼저 선택해 주세요</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 5: 서명 -->
+        <section class="form-card" id="staffStep5" data-step="5" data-flow="shared" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 5</p>
+              <h2>자필 서명</h2>
+              <p class="muted">손가락 또는 마우스로 서명해 주세요.</p>
+            </div>
+            <span class="step-badge">5</span>
+          </div>
+          <div class="divider"></div>
+          <div class="signature-pad-wrap">
+            <canvas id="signatureCanvas" class="signature-canvas" aria-label="서명 입력 영역"></canvas>
+            <div class="signature-pad-actions">
+              <button type="button" class="btn-ghost btn-ghost--sm" id="btnClearSignature">지우기</button>
+            </div>
+          </div>
+          <div class="submit-block submit-block--desktop">
+            <button type="button" class="btn-primary" id="btnStaffSubmit" disabled>
+              <span class="btn-spinner" hidden aria-hidden="true"></span>
+              <span class="btn-primary__icon" aria-hidden="true">✓</span>
+              <span class="btn-label">서명 제출하기</span>
+            </button>
+            <p class="submit-message" id="staffSubmitMessage" role="status"></p>
+          </div>
+        </section>
+      </div>
+
+    </main>
+
+    <!-- ═══ 관리자 페이지 ═══ -->
+    <main class="panel layout-single admin-panel" id="adminPanel" hidden aria-label="관리자">
+      <!-- 관리자 로그인 -->
+      <section class="form-card form-card--solo admin-login-card" id="adminLoginCard">
+        <p class="kicker admin-kicker">관리자 전용</p>
+        <h2>관리자 로그인</h2>
+        <p class="muted">학교 지정 관리자만 접근할 수 있습니다.</p>
+        <div class="divider"></div>
+        <div class="field" id="adminSchoolGate">
+          <label class="field__label" for="adminSchoolPassword">학교 코드</label>
+          <div class="input-wrap">
+            <input type="text" id="adminSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+          </div>
+          <p class="hint">학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.</p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="adminPassword">관리자 암호</label>
+          <div class="input-wrap">
+            <input type="password" id="adminPassword" autocomplete="current-password" placeholder="암호 입력" />
+          </div>
+        </div>
+        <div class="submit-block">
+          <button type="button" class="btn-primary" id="btnAdminLogin">로그인</button>
+          <p class="submit-message" id="adminLoginMessage" role="status"></p>
+        </div>
+      </section>
+
+      <!-- 관리자 대시보드 -->
+      <div id="adminDashboard" hidden>
+        <div class="admin-header">
+          <p class="admin-welcome">관리자 모드</p>
+          <button type="button" class="btn-ghost btn-ghost--sm" id="btnAdminLogout">로그아웃</button>
+        </div>
+
+        <nav class="admin-menu" aria-label="관리자 메뉴">
+          <button type="button" class="admin-menu__item is-active" data-admin-tab="events" data-admin-scope="school">연수·회의 관리</button>
+          <button type="button" class="admin-menu__item" data-admin-tab="staff" data-admin-scope="school">구성원 관리</button>
+          <button type="button" class="admin-menu__item" data-admin-tab="status" data-admin-scope="all">서명 현황</button>
+          <button type="button" class="admin-menu__item" data-admin-tab="print" data-admin-scope="all">등록부 출력</button>
+        </nav>
+
+        <!-- 1. 연수·회의 관리 -->
+        <section class="admin-tab-panel is-active" id="adminTabEvents" data-tab="events">
+          <div class="form-card">
+            <h2>연수·회의 만들기</h2>
+            <p class="muted">새 연수·회의를 등록합니다. 기존 항목은 아래 목록에서 선택해 수정·삭제할 수 있습니다.</p>
+            <div class="divider"></div>
+            <form id="adminEventForm" class="admin-form admin-form--event-create">
+              <div class="field-row field-row--2">
+                <div class="field">
+                  <label class="field__label" for="adminEventDate">날짜</label>
+                  <div class="input-wrap"><input type="date" id="adminEventDate" required /></div>
+                </div>
+                <div class="field">
+                  <label class="field__label" for="adminEventLocation">장소</label>
+                  <div class="input-wrap"><input type="text" id="adminEventLocation" /></div>
+                </div>
+              </div>
+              <div class="field">
+                <label class="field__label" for="adminEventTitle">제목</label>
+                <div class="input-wrap"><input type="text" id="adminEventTitle" required /></div>
+              </div>
+              <div class="field">
+                <label class="field__label" for="adminEventDesc">설명</label>
+                <textarea id="adminEventDesc" rows="3"></textarea>
+              </div>
+              <div class="field">
+                <label class="field__label" for="adminEventStatus">상태</label>
+                <div class="input-wrap">
+                  <select id="adminEventStatus">
+                    <option value="진행중">진행중</option>
+                    <option value="마감">마감</option>
+                    <option value="보관">보관</option>
+                  </select>
+                </div>
+              </div>
+              <div class="field dept-picker-field">
+                <div class="dept-picker">
+                  <div class="dept-picker__head">
+                    <span class="field__label">부서</span>
+                    <label class="checkbox-row checkbox-row--compact dept-picker__select-all">
+                      <input type="checkbox" id="adminEventDeptSelectAll" checked />
+                      전체 선택
+                    </label>
+                  </div>
+                  <div class="dept-picker__list" id="adminEventDeptList" role="group" aria-label="대상 부서">
+                    <p class="dept-picker__empty muted">구성원 명단을 불러오는 중…</p>
+                  </div>
+                  <p class="hint dept-picker__hint">구성원 명단에 등록된 부서 기준입니다. 전체 선택 시 전 교직원이 대상입니다.</p>
+                </div>
+              </div>
+              <div class="admin-form-actions admin-form-actions--end">
+                <button type="button" class="btn-ghost btn-ghost--sm" id="btnAdminEventReset">입력 초기화</button>
+                <button type="submit" class="btn-primary btn-primary--sm">연수·회의 등록</button>
+              </div>
+              <p class="submit-message submit-message--form-foot" id="adminEventMessage" role="status"></p>
+            </form>
+          </div>
+          <div class="form-card">
+            <h2>연수·회의 목록</h2>
+            <p class="muted">등록된 연수·회의입니다. 항목을 누르면 상세 보기·수정·삭제가 가능합니다.</p>
+            <div class="admin-list" id="adminEventList"></div>
+          </div>
+        </section>
+
+        <!-- 2. 구성원 관리 -->
+        <section class="admin-tab-panel" id="adminTabStaff" data-tab="staff" hidden>
+          <div class="form-card admin-staff-card">
+            <div class="admin-staff-head">
+              <div>
+                <h2>구성원 명단</h2>
+                <p class="muted">표 안에서 직접 수정한 뒤, 우측 상단의 저장 버튼으로 반영됩니다.</p>
+              </div>
+              <div class="admin-staff-actions">
+                <button type="button" class="btn-ghost btn-ghost--sm btn-ghost--danger" id="btnResetStaffList">명단 초기화</button>
+                <button type="button" class="btn-ghost btn-ghost--sm" id="btnDownloadStaffCsvTemplate">기본 양식</button>
+                <button type="button" class="btn-ghost btn-ghost--sm" id="btnUploadCsv">양식 업로드</button>
+                <button type="button" class="btn-ghost btn-ghost--sm" id="btnAddStaffRow">구성원 추가</button>
+                <button type="button" class="btn-primary btn-primary--sm" id="btnSaveStaffChanges">저장</button>
+              </div>
+            </div>
+
+            <p class="submit-message" id="adminCsvMessage" role="status"></p>
+
+            <input type="file" id="staffCsvFile" accept=".csv,text/csv" />
+
+            <div class="table-wrap">
+              <table class="data-table admin-staff-edit-table" id="adminStaffTable">
+                <thead>
+                  <tr>
+                    <th>부서</th>
+                    <th>직위</th>
+                    <th>담당업무</th>
+                    <th>성명</th>
+                    <th>비고</th>
+                    <th>사용</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="adminStaffTableBody"></tbody>
+              </table>
+            </div>
+
+            <p class="submit-message" id="adminStaffMessage" role="status"></p>
+          </div>
+        </section>
+
+        <!-- 3. 서명 현황 -->
+        <section class="admin-tab-panel" id="adminTabStatus" data-tab="status" hidden>
+          <div class="form-card">
+            <h2>서명 현황</h2>
+            <div class="field" id="adminStatusEventField">
+              <label class="field__label" for="adminStatusEventSelect">연수·회의</label>
+              <div class="input-wrap">
+                <select id="adminStatusEventSelect"></select>
+              </div>
+            </div>
+            <p class="muted workshop-admin-hint" id="adminWorkshopStatusHint" hidden>개인 연수 모드 — 참가 서명 목록입니다.</p>
+            <div class="status-summary" id="adminStatusSummary" hidden>
+              <div class="status-stat">
+                <span class="status-stat__label">전체 대상</span>
+                <span class="status-stat__value" id="statTotal">0</span>
+              </div>
+              <div class="status-stat status-stat--done">
+                <span class="status-stat__label">서명 완료</span>
+                <span class="status-stat__value" id="statSigned">0</span>
+              </div>
+              <div class="status-stat status-stat--pending">
+                <span class="status-stat__label">미서명</span>
+                <span class="status-stat__value" id="statUnsigned">0</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-card" id="adminSignedCard" hidden>
+            <h3 class="section-subtitle">서명 완료자</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>부서</th><th>이름</th><th>제출 시간</th><th>서명</th><th aria-label="삭제"></th></tr>
+                </thead>
+                <tbody id="adminSignedTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="form-card" id="adminUnsignedCard" hidden>
+            <h3 class="section-subtitle">미서명자</h3>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr><th>부서</th><th>이름</th><th>직위</th></tr>
+                </thead>
+                <tbody id="adminUnsignedTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. 등록부 출력 -->
+        <section class="admin-tab-panel" id="adminTabPrint" data-tab="print" hidden>
+          <div class="form-card no-print">
+            <h2>등록부 출력</h2>
+            <div class="field" id="adminPrintEventField">
+              <label class="field__label" for="adminPrintEventSelect">연수·회의</label>
+              <div class="input-wrap">
+                <select id="adminPrintEventSelect"></select>
+              </div>
+            </div>
+            <button type="button" class="btn-primary btn-primary--sm" id="btnLoadPrint">등록부 불러오기</button>
+          </div>
+          <div class="form-card print-register" id="printRegisterArea" hidden>
+            <div class="print-register-toolbar no-print">
+              <button type="button" class="btn-primary btn-primary--sm" id="btnPrintRegister">인쇄 / PDF 저장</button>
+            </div>
+            <div class="print-document" id="printDocument">
+              <header class="print-doc-header">
+                <h1 class="print-doc-title">연 수 등 록 부</h1>
+                <ul class="print-doc-info">
+                  <li>
+                    <span class="print-doc-bullet" aria-hidden="true">•</span>
+                    <span class="print-doc-label">연수내용</span>
+                    <span class="print-doc-value" id="printTrainingContent"></span>
+                  </li>
+                  <li>
+                    <span class="print-doc-bullet" aria-hidden="true">•</span>
+                    <span class="print-doc-label">연수일시</span>
+                    <span class="print-doc-value" id="printTrainingDatetime"></span>
+                  </li>
+                  <li>
+                    <span class="print-doc-bullet" aria-hidden="true">•</span>
+                    <span class="print-doc-label">서명현황</span>
+                    <span class="print-doc-value" id="printSignatureSummary">총 0명 · 서명 0명 · 미서명 0명</span>
+                  </li>
+                </ul>
+              </header>
+              <table class="print-table print-table--two-col" id="printTable">
+                <thead>
+                  <tr>
+                    <th scope="col">연번</th>
+                    <th scope="col">부서</th>
+                    <th scope="col">직위</th>
+                    <th scope="col">성명</th>
+                    <th scope="col">서명</th>
+                    <th scope="col">비고</th>
+                    <th scope="col">연번</th>
+                    <th scope="col">부서</th>
+                    <th scope="col">직위</th>
+                    <th scope="col">성명</th>
+                    <th scope="col">서명</th>
+                    <th scope="col">비고</th>
+                  </tr>
+                </thead>
+                <tbody id="printTableBody"></tbody>
+                <tfoot>
+                  <tr class="print-table-summary">
+                    <td colspan="2">총 인원</td>
+                    <td id="printAttendeeCount">0 명</td>
+                    <td colspan="2">서명 인원</td>
+                    <td id="printSignedCount">0 명</td>
+                    <td colspan="2">미서명</td>
+                    <td id="printUnsignedCount">0 명</td>
+                    <td colspan="3"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- 제출 확인 모달 -->
+  <div class="modal-backdrop" id="confirmModal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle">
+    <div class="modal-card modal-card--sm">
+      <h2 class="modal-title" id="confirmModalTitle">서명 제출</h2>
+      <p class="modal-subtitle" id="confirmModalText"></p>
+      <div class="modal-actions modal-actions--row">
+        <button type="button" class="btn-ghost" id="btnConfirmCancel">아니요, 다시 선택할게요</button>
+        <button type="button" class="btn-primary btn-primary--sm" id="btnConfirmSubmit">
+          <span class="btn-spinner" hidden aria-hidden="true"></span>
+          <span class="btn-label">네, 제출합니다</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 서명 제출 완료 모달 -->
+  <div class="modal-backdrop" id="staffSuccessModal" hidden role="dialog" aria-modal="true" aria-labelledby="staffSuccessModalTitle">
+    <div class="modal-card modal-card--sm modal-card--success">
+      <div class="success-icon" aria-hidden="true">
+        <svg viewBox="0 0 52 52" class="success-check-svg">
+          <circle class="success-check-circle" cx="26" cy="26" r="24" fill="none"/>
+          <path class="success-check-path" fill="none" d="M14 27l8 8 16-18"/>
+        </svg>
+      </div>
+      <h2 class="modal-title success-title" id="staffSuccessModalTitle">제출이 완료되었습니다</h2>
+      <p class="modal-subtitle" id="staffSuccessModalDetail">감사합니다. 창을 닫으셔도 됩니다.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn-primary btn-primary--sm" id="btnStaffAnother">다른 연수 서명하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 연수·회의 상세 모달 -->
+  <div class="modal-backdrop" id="eventDetailModal" hidden role="dialog" aria-modal="true" aria-labelledby="eventDetailModalTitle">
+    <div class="modal-card modal-card--wide">
+      <h2 class="modal-title" id="eventDetailModalTitle">연수·회의 상세</h2>
+      <form id="adminEventModalForm" class="admin-form admin-form--event-create">
+        <input type="hidden" id="modalEventId" />
+        <div class="field-row field-row--2">
+          <div class="field">
+            <label class="field__label" for="modalEventDate">날짜</label>
+            <div class="input-wrap"><input type="date" id="modalEventDate" required /></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="modalEventLocation">장소</label>
+            <div class="input-wrap"><input type="text" id="modalEventLocation" /></div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field__label" for="modalEventTitle">제목</label>
+          <div class="input-wrap"><input type="text" id="modalEventTitle" required /></div>
+        </div>
+        <div class="field">
+          <label class="field__label" for="modalEventDesc">설명</label>
+          <textarea id="modalEventDesc" rows="3"></textarea>
+        </div>
+        <div class="field">
+          <label class="field__label" for="modalEventStatus">상태</label>
+          <div class="input-wrap">
+            <select id="modalEventStatus">
+              <option value="진행중">진행중</option>
+              <option value="마감">마감</option>
+              <option value="보관">보관</option>
+            </select>
+          </div>
+        </div>
+        <div class="field dept-picker-field">
+          <div class="dept-picker">
+            <div class="dept-picker__head">
+              <span class="field__label">부서</span>
+              <label class="checkbox-row checkbox-row--compact dept-picker__select-all">
+                <input type="checkbox" id="modalEventDeptSelectAll" />
+                전체 선택
+              </label>
+            </div>
+            <div class="dept-picker__list" id="modalEventDeptList" role="group" aria-label="대상 부서"></div>
+            <p class="hint dept-picker__hint" id="modalDeptPickerHint" hidden></p>
+          </div>
+        </div>
+        <div class="modal-actions modal-actions--row modal-actions--event modal-actions--end">
+          <button type="button" class="btn-ghost btn-ghost--sm" id="btnEventModalClose">닫기</button>
+          <button type="button" class="btn-ghost btn-ghost--sm btn-ghost--danger" id="btnEventModalDelete">삭제</button>
+          <button type="submit" class="btn-primary btn-primary--sm">저장</button>
+        </div>
+        <p class="submit-message submit-message--form-foot" id="adminEventModalMessage" role="status"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- 구성원 추가 모달 -->
+  <div class="modal-backdrop" id="staffAddModal" hidden role="dialog" aria-modal="true" aria-labelledby="staffAddModalTitle">
+    <div class="modal-card modal-card--wide">
+      <h2 class="modal-title" id="staffAddModalTitle">구성원 추가</h2>
+      <form id="staffAddForm" class="admin-form">
+        <div class="field-row field-row--2">
+          <div class="field">
+            <label class="field__label" for="staffAddDept">부서</label>
+            <div class="input-wrap"><input type="text" id="staffAddDept" required /></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="staffAddPosition">직위</label>
+            <div class="input-wrap"><input type="text" id="staffAddPosition" /></div>
+          </div>
+        </div>
+        <div class="field-row field-row--2">
+          <div class="field">
+            <label class="field__label" for="staffAddRank">담당업무</label>
+            <div class="input-wrap"><input type="text" id="staffAddRank" placeholder="부장 / 1반 담임 등" /></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="staffAddName">성명</label>
+            <div class="input-wrap"><input type="text" id="staffAddName" required /></div>
+          </div>
+        </div>
+        <div class="field-row field-row--2">
+          <div class="field">
+            <label class="field__label" for="staffAddRemarks">비고</label>
+            <div class="input-wrap"><input type="text" id="staffAddRemarks" placeholder="추가 메모" /></div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="staffAddActive">사용 여부</label>
+            <div class="input-wrap">
+              <select id="staffAddActive">
+                <option value="Y">사용</option>
+                <option value="N">미사용</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <p class="submit-message" id="staffAddMessage" role="status"></p>
+        <div class="modal-actions modal-actions--row modal-actions--event">
+          <button type="button" class="btn-ghost btn-ghost--sm" id="btnStaffAddCancel">취소</button>
+          <button type="submit" class="btn-primary btn-primary--sm">추가</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 수정 제출 확인 모달 -->
+  <div class="modal-backdrop" id="overwriteModal" hidden role="dialog" aria-modal="true">
+    <div class="modal-card modal-card--sm">
+      <h2 class="modal-title">이미 제출했습니다</h2>
+      <p class="modal-subtitle" id="overwriteModalText">수정 제출하시겠습니까?<br />기존 서명이 새 서명으로 바뀝니다.</p>
+      <div class="modal-actions modal-actions--row">
+        <button type="button" class="btn-ghost" id="btnOverwriteCancel">취소</button>
+        <button type="button" class="btn-primary btn-primary--sm" id="btnOverwriteOk">
+          <span class="btn-spinner" hidden aria-hidden="true"></span>
+          <span class="btn-label">수정 제출</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="global-toast" id="globalToast" role="status" aria-live="polite"></div>
+
+  <script src="school-config.js"></script>
+  <script src="script.js" onerror="window.__signonScriptError=true"></script>
+  <script>
+    (function () {
+      function bindSchoolGateEarly() {
+        if (window.__signonGateBound) return;
+        var btn = document.getElementById("btnStaffSchoolUnlock");
+        var input = document.getElementById("staffSchoolPassword");
+        if (!btn) return;
+        window.__signonGateBound = true;
+        btn.addEventListener("click", function () {
+          if (window.__signonScriptError) {
+            alert("script.js를 불러오지 못했습니다. GitHub Pages 주소 끝에 / 를 붙이거나 Ctrl+F5로 새로고침해 주세요.");
+            return;
+          }
+          if (typeof window.__signonUnlock === "function") {
+            window.__signonUnlock();
+            return;
+          }
+          alert("페이지 초기화가 끝나지 않았습니다. 잠시 후 다시 시도하거나 새로고침해 주세요.");
+        });
+        if (input) {
+          input.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              btn.click();
+            }
+          });
+        }
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", bindSchoolGateEarly);
+      } else {
+        bindSchoolGateEarly();
+      }
+    })();
+  </script>
+</body>
+</html>
