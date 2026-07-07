@@ -117,7 +117,7 @@
       if (badge) badge.hidden = !workshop;
       if (ledeMain) {
         ledeMain.textContent = workshop
-          ? "연수 참가 확인을 위해 학교명 · 성함 · 서명 순서로 진행해 주세요."
+          ? "연수 일자 · 연수 선택 · 학교명 · 성함 · 서명 순서로 진행해 주세요."
           : "온라인에서 간편하게, 연수 등록부에 서명하세요.";
       }
       if (ledeSub) {
@@ -440,7 +440,7 @@
     },
 
     STAFF_STEP_IDS: ["staffStep1", "staffStep2", "staffStep3", "staffStep4", "staffStep5"],
-    WORKSHOP_STEP_IDS: ["staffWsStep1", "staffWsStep2", "staffStep5"],
+    WORKSHOP_STEP_IDS: ["staffStep1", "staffStep2", "staffWsStep1", "staffWsStep2", "staffStep5"],
     workshopEventId: "",
     _lastVisibleStaffStep: 0,
     /** 학교 코드 확인 후 true — 확인 전에는 스텝 카드 전부 숨김 */
@@ -507,11 +507,7 @@
       if (gateCard) gateCard.hidden = true;
       StaffApp.setStaffStepsLocked(false);
       UI.setMessage(msgEl, "");
-      if (AppConfig.isWorkshopMode()) {
-        StaffApp.initWorkshopFlow();
-      } else {
-        StaffApp.loadEvents();
-      }
+      StaffApp.loadEvents();
     },
 
     getAllStaffStepElementIds() {
@@ -612,13 +608,6 @@
       StaffApp.workshopEventId = "";
     },
 
-    async initWorkshopFlow() {
-      const info = await UI.withLoading(() => Api.call("getWorkshopInfo"), "연수 정보 불러오는 중…");
-      StaffApp.workshopEventId = info.eventId;
-      StaffApp.state.eventIds = [info.eventId];
-      StaffApp.refreshStaffSteps();
-    },
-
     onWorkshopInput() {
       StaffApp.syncWorkshopState();
       StaffApp.refreshStaffSteps();
@@ -667,11 +656,7 @@
       try {
         StaffApp.resetStaffFormState();
 
-        if (AppConfig.isWorkshopMode(school)) {
-          await StaffApp.initWorkshopFlow();
-        } else {
-          await StaffApp.loadEvents();
-        }
+        await StaffApp.loadEvents();
 
         StaffApp._schoolFlowStarted = true;
         if (gateCard) gateCard.hidden = true;
@@ -684,7 +669,7 @@
           UI.toastMsg("연수용 서명 등록부로 전환되었습니다.");
         }
 
-        const firstStepId = AppConfig.isWorkshopMode(school) ? "staffWsStep1" : "staffStep1";
+        const firstStepId = "staffStep1";
         requestAnimationFrame(() => {
           document.getElementById(firstStepId)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         });
@@ -721,7 +706,6 @@
     },
 
     async loadEvents() {
-      if (AppConfig.isWorkshopMode()) return;
       const dateSel = document.getElementById("staffDateSelect");
       const dateHint = document.getElementById("staffDateHint");
       try {
@@ -839,9 +823,13 @@
     onEventChecklistChange() {
       StaffApp.syncSelectedEventIds();
       const ids = StaffApp.state.eventIds;
-      StaffApp.state.department = "";
-      StaffApp.state.staffId = "";
-      StaffApp.state.staffKey = "";
+      if (!AppConfig.isWorkshopMode()) {
+        StaffApp.state.department = "";
+        StaffApp.state.staffId = "";
+        StaffApp.state.staffKey = "";
+        StaffApp.loadStaffForSelectedEvents();
+        StaffApp.resetDeptName();
+      }
       StaffApp.refreshStaffSteps();
 
       const btn = document.getElementById("btnStaffSelectAllEvents");
@@ -863,8 +851,10 @@
         }
       }
 
-      StaffApp.loadStaffForSelectedEvents();
-      StaffApp.resetDeptName();
+      if (!AppConfig.isWorkshopMode()) {
+        StaffApp.loadStaffForSelectedEvents();
+        StaffApp.resetDeptName();
+      }
       StaffApp.validateSubmitButton();
     },
 
@@ -874,11 +864,13 @@
 
       StaffApp.state.selectedDate = dateSel.value;
       StaffApp.state.eventIds = [];
-      StaffApp.state.department = "";
-      StaffApp.state.staffId = "";
-      StaffApp.state.staffKey = "";
+      if (!AppConfig.isWorkshopMode()) {
+        StaffApp.state.department = "";
+        StaffApp.state.staffId = "";
+        StaffApp.state.staffKey = "";
+        StaffApp.resetDeptName();
+      }
       StaffApp.refreshStaffSteps();
-      StaffApp.resetDeptName();
 
       if (!dateSel.value) {
         StaffApp.renderEventChecklist([]);
@@ -1063,59 +1055,67 @@
     refreshWorkshopSteps() {
       StaffApp.syncWorkshopState();
 
-      StaffApp.STAFF_STEP_IDS.filter((id) => id !== "staffStep5").forEach((id) => {
+      ["staffStep3", "staffStep4"].forEach((id) => {
         const card = document.getElementById(id);
-        if (card) {
-          card.hidden = true;
-          card.classList.remove("is-active", "is-complete", "is-step-enter");
-        }
+        if (card) card.hidden = true;
       });
 
       const schoolNorm = StaffApp.state.department;
       const name = StaffApp.state.name;
       const completed = {
-        1: !!schoolNorm,
-        2: !!name,
+        1: !!StaffApp.state.selectedDate,
+        2: StaffApp.state.eventIds.length > 0,
+        3: !!schoolNorm,
+        4: !!name,
       };
 
       let lastVisible = 1;
       if (completed[1]) lastVisible = 2;
       if (completed[1] && completed[2]) lastVisible = 3;
+      if (completed[1] && completed[2] && completed[3]) lastVisible = 4;
+      if (completed[1] && completed[2] && completed[3] && completed[4]) lastVisible = 5;
 
       const stepRevealed = lastVisible > StaffApp._lastVisibleStaffStep;
       StaffApp._lastVisibleStaffStep = lastVisible;
 
-      StaffApp.WORKSHOP_STEP_IDS.forEach((id, index) => {
-        const n = index + 1;
+      const stepLabels = {
+        staffStep1: 1,
+        staffStep2: 2,
+        staffWsStep1: 3,
+        staffWsStep2: 4,
+        staffStep5: 5,
+      };
+
+      StaffApp.WORKSHOP_STEP_IDS.forEach((id) => {
+        const n = stepLabels[id];
         const card = document.getElementById(id);
         if (!card) return;
 
         const badge = card.querySelector(".step-badge");
+        const kicker = card.querySelector(".kicker");
         const visible = n <= lastVisible;
         const complete =
-          n === 1 ? !!completed[1] : n === 2 ? !!completed[2] : completed[1] && completed[2] && !SignaturePad.isEmpty();
+          n === 5
+            ? completed[1] && completed[2] && completed[3] && completed[4] && !SignaturePad.isEmpty()
+            : !!completed[n];
         const active = visible && n === lastVisible && !complete;
 
         card.hidden = !visible;
         card.classList.toggle("is-complete", complete);
         card.classList.toggle("is-active", active);
         badge?.classList.toggle("is-complete", complete);
+        if (kicker) kicker.textContent = `STEP ${n}`;
+        if (badge) badge.textContent = String(n);
 
         card.classList.remove("is-step-enter");
         if (visible && n === lastVisible && stepRevealed) {
           card.classList.add("is-step-enter");
         }
-
-        if (id === "staffStep5") {
-          const kicker = card.querySelector(".kicker");
-          if (kicker) kicker.textContent = "STEP 3";
-          if (badge) badge.textContent = "3";
-        }
       });
 
-      if (lastVisible === 3 && completed[1] && completed[2] && stepRevealed) {
+      if (lastVisible === 5 && completed[1] && completed[2] && completed[3] && completed[4] && stepRevealed) {
         SignaturePad.ensureReady();
-      } else if (stepRevealed && lastVisible < 3) {
+      } else if (stepRevealed && lastVisible < 5) {
         const card = document.getElementById(StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1]);
         card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
@@ -1141,7 +1141,11 @@
       const btn = document.getElementById("btnStaffSubmit");
       let ok;
       if (AppConfig.isWorkshopMode()) {
-        ok = !!StaffApp.state.staffKey && !SignaturePad.isEmpty();
+        ok =
+          !!StaffApp.state.selectedDate &&
+          StaffApp.state.eventIds.length > 0 &&
+          !!StaffApp.state.staffKey &&
+          !SignaturePad.isEmpty();
       } else {
         ok =
           StaffApp.state.eventIds.length > 0 &&
@@ -1159,12 +1163,23 @@
     async onSubmitClick() {
       if (AppConfig.isWorkshopMode()) {
         StaffApp.syncWorkshopState();
+        if (!StaffApp.state.selectedDate || !StaffApp.state.eventIds.length) {
+          UI.toastMsg("연수 일자와 연수를 선택해 주세요.", true);
+          return;
+        }
         if (!StaffApp.state.staffKey) {
           UI.toastMsg("학교명과 성함을 입력해 주세요.", true);
           return;
         }
         if (SignaturePad.isEmpty()) {
           UI.toastMsg("서명을 입력해 주세요.", true);
+          return;
+        }
+
+        const selected = StaffApp.getSelectedEvents();
+        const closed = selected.filter((ev) => ev.status === "마감");
+        if (closed.length) {
+          UI.toastMsg("마감된 연수는 제출할 수 없습니다. 선택을 확인해 주세요.", true);
           return;
         }
       } else {
@@ -1278,7 +1293,7 @@
       const prevDate = keepDate ? StaffApp.state.selectedDate : "";
 
       if (keepDate) {
-        StaffApp.state.eventIds = AppConfig.isWorkshopMode() && StaffApp.workshopEventId ? [StaffApp.workshopEventId] : [];
+        StaffApp.state.eventIds = [];
         StaffApp.state.department = "";
         StaffApp.state.staffId = "";
         StaffApp.state.staffKey = "";
@@ -1287,12 +1302,13 @@
         StaffApp._lastVisibleStaffStep = 0;
         SignaturePad.clear();
         UI.closeModal("staffSuccessModal");
-        StaffApp.resetDeptName();
         if (AppConfig.isWorkshopMode()) {
           const freeSchool = document.getElementById("staffFreeSchool");
           const freeName = document.getElementById("staffFreeName");
           if (freeSchool) freeSchool.value = "";
           if (freeName) freeName.value = "";
+        } else {
+          StaffApp.resetDeptName();
         }
       } else {
         StaffApp.resetStaffFormState();
@@ -1300,7 +1316,7 @@
 
       const successDetail = document.getElementById("staffSuccessModalDetail");
       if (successDetail) successDetail.textContent = "감사합니다. 창을 닫으셔도 됩니다.";
-      await (AppConfig.isWorkshopMode() ? StaffApp.initWorkshopFlow() : StaffApp.loadEvents());
+      await StaffApp.loadEvents();
 
       const dateSel = document.getElementById("staffDateSelect");
       if (keepDate && prevDate && dateSel) {
@@ -1342,8 +1358,8 @@
       const statusField = document.getElementById("adminStatusEventField");
       const printField = document.getElementById("adminPrintEventField");
       const wsHint = document.getElementById("adminWorkshopStatusHint");
-      if (statusField) statusField.hidden = workshop;
-      if (printField) printField.hidden = workshop;
+      if (statusField) statusField.hidden = false;
+      if (printField) printField.hidden = false;
       if (wsHint) wsHint.hidden = !workshop;
 
       const unsignedStat = document.querySelector(".status-stat--pending");
@@ -1359,16 +1375,24 @@
       deptHeaders.forEach((th) => {
         th.textContent = workshop ? "학교" : "부서";
       });
+
+      const intro = document.getElementById("adminLoginIntro");
+      if (intro) {
+        intro.textContent = workshop
+          ? "연수용 관리자 화면입니다. 서명 현황과 등록부 출력을 이용하세요."
+          : "학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.";
+      }
     },
 
     init() {
       document.getElementById("btnAdminLogin")?.addEventListener("click", AdminApp.login);
+      document.getElementById("btnAdminSchoolUnlock")?.addEventListener("click", AdminApp.unlockSchool);
       document.getElementById("btnAdminLogout")?.addEventListener("click", AdminApp.logout);
       document.getElementById("adminPassword")?.addEventListener("keydown", (e) => {
         if (e.key === "Enter") AdminApp.login();
       });
       document.getElementById("adminSchoolPassword")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") AdminApp.login();
+        if (e.key === "Enter") AdminApp.unlockSchool();
       });
 
       document.querySelectorAll(".admin-menu__item").forEach((btn) => {
@@ -1428,31 +1452,48 @@
 
     applySchoolGateState() {
       const gate = document.getElementById("adminSchoolGate");
+      const gateActions = document.getElementById("adminSchoolGateActions");
+      const passwordSection = document.getElementById("adminPasswordSection");
       if (!gate) return;
       if (!AppConfig.hasSchoolGate()) {
         gate.hidden = true;
+        if (gateActions) gateActions.hidden = true;
+        if (passwordSection) passwordSection.hidden = false;
         return;
       }
-      gate.hidden = !!AppConfig.activeSchoolId;
+      const unlocked = !!AppConfig.activeSchoolId;
+      gate.hidden = unlocked;
+      if (gateActions) gateActions.hidden = unlocked;
+      if (passwordSection) passwordSection.hidden = !unlocked;
+    },
+
+    async unlockSchool() {
+      const msgEl = document.getElementById("adminLoginMessage");
+      const schoolPw = document.getElementById("adminSchoolPassword")?.value || "";
+      const school = AppConfig.setSchoolByPassword(schoolPw);
+      if (!school) {
+        UI.setMessage(msgEl, "학교 코드가 올바르지 않습니다.", true);
+        return;
+      }
+      Api.setAdminToken("");
+      UI.setMessage(msgEl, "");
+      AdminApp.applySchoolGateState();
+      AppConfig.applyFlowModeUi();
+      AdminApp.applyWorkshopAdminLayout();
+      if (AppConfig.isWorkshopMode(school)) {
+        UI.toastMsg("연수용 관리자 화면입니다.");
+      }
+      document.getElementById("adminPassword")?.focus();
     },
 
     async login() {
-      // 학교 코드(학교 선택) 확인
       if (AppConfig.hasSchoolGate() && !AppConfig.activeSchoolId) {
-        const schoolPw = document.getElementById("adminSchoolPassword")?.value || "";
-        const school = AppConfig.setSchoolByPassword(schoolPw);
-        if (!school) {
-          UI.setMessage(
-            document.getElementById("adminLoginMessage"),
-            "학교 코드가 올바르지 않습니다.",
-            true
-          );
-          return;
-        }
-        // 학교가 선택되면 기존 토큰은 무효
-        Api.setAdminToken("");
-        AdminApp.applySchoolGateState();
-        AppConfig.applyFlowModeUi();
+        UI.setMessage(
+          document.getElementById("adminLoginMessage"),
+          "먼저 학교 코드를 확인해 주세요.",
+          true
+        );
+        return;
       }
 
       const pw = document.getElementById("adminPassword").value;
@@ -1482,8 +1523,10 @@
       document.getElementById("adminPassword").value = "";
       const schoolPwEl = document.getElementById("adminSchoolPassword");
       if (schoolPwEl) schoolPwEl.value = "";
+      AppConfig.setActiveSchoolId("");
       AdminApp.applySchoolGateState();
       AppConfig.applyFlowModeUi();
+      AdminApp.applyWorkshopAdminLayout();
     },
 
     showDashboard() {
@@ -1499,7 +1542,9 @@
 
     async refreshAll() {
       if (AdminApp.isWorkshopAdmin()) {
-        await AdminApp.loadWorkshopAdminData();
+        await AdminApp.loadAdminEvents();
+        AdminApp.fillEventSelects();
+        AdminApp.switchTab("status");
         return;
       }
       await AdminApp.loadAdminEvents();
@@ -2177,20 +2222,8 @@
       });
     },
 
-    async loadWorkshopAdminData() {
-      try {
-        const info = await Api.call("getWorkshopInfo", {}, true);
-        AdminApp.workshopEventId = info.eventId;
-        await AdminApp.loadStatus();
-      } catch (err) {
-        UI.toastMsg(err.message, true);
-      }
-    },
-
     async deleteSignature(target) {
-      const eventId = AdminApp.isWorkshopAdmin()
-        ? AdminApp.workshopEventId
-        : document.getElementById("adminStatusEventSelect")?.value;
+      const eventId = document.getElementById("adminStatusEventSelect")?.value;
       if (!eventId) {
         UI.toastMsg("연수를 먼저 선택해 주세요.", true);
         return;
@@ -2225,14 +2258,7 @@
     },
 
     async loadStatus() {
-      let eventId = document.getElementById("adminStatusEventSelect")?.value;
-      if (AdminApp.isWorkshopAdmin()) {
-        if (!AdminApp.workshopEventId) {
-          await AdminApp.loadWorkshopAdminData();
-          return;
-        }
-        eventId = AdminApp.workshopEventId;
-      }
+      const eventId = document.getElementById("adminStatusEventSelect")?.value;
       if (!eventId) return;
       try {
         const data = await UI.withLoading(
@@ -2286,19 +2312,7 @@
     },
 
     async loadPrint() {
-      let eventId = document.getElementById("adminPrintEventSelect")?.value;
-      if (AdminApp.isWorkshopAdmin()) {
-        if (!AdminApp.workshopEventId) {
-          try {
-            const info = await Api.call("getWorkshopInfo", {}, true);
-            AdminApp.workshopEventId = info.eventId;
-          } catch (err) {
-            UI.toastMsg(err.message, true);
-            return;
-          }
-        }
-        eventId = AdminApp.workshopEventId;
-      }
+      const eventId = document.getElementById("adminPrintEventSelect")?.value;
       if (!eventId) {
         UI.toastMsg("연수를 선택해 주세요.", true);
         return;

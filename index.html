@@ -95,15 +95,15 @@
           </div>
         </section>
 
-        <!-- 워크숍(geo1234): STEP 1 학교명 -->
-        <section class="form-card" id="staffWsStep1" data-step="1" data-flow="workshop" hidden>
+        <!-- 워크숍(geo1234): STEP 3 학교명 -->
+        <section class="form-card" id="staffWsStep1" data-step="3" data-flow="workshop" hidden>
           <div class="form-card__head">
             <div>
-              <p class="kicker">STEP 1</p>
+              <p class="kicker">STEP 3</p>
               <h2>학교명 입력</h2>
               <p class="muted">소속 학교명을 입력해 주세요. (예: OO중, OO중학교)</p>
             </div>
-            <span class="step-badge">1</span>
+            <span class="step-badge">3</span>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -115,14 +115,14 @@
           </div>
         </section>
 
-        <!-- 워크숍(geo1234): STEP 2 성함 -->
-        <section class="form-card" id="staffWsStep2" data-step="2" data-flow="workshop" hidden>
+        <!-- 워크숍(geo1234): STEP 4 성함 -->
+        <section class="form-card" id="staffWsStep2" data-step="4" data-flow="workshop" hidden>
           <div class="form-card__head">
             <div>
-              <p class="kicker">STEP 2</p>
+              <p class="kicker">STEP 4</p>
               <h2>성함 입력</h2>
             </div>
-            <span class="step-badge">2</span>
+            <span class="step-badge">4</span>
           </div>
           <div class="divider"></div>
           <div class="field">
@@ -260,25 +260,29 @@
       <section class="form-card form-card--solo admin-login-card" id="adminLoginCard">
         <p class="kicker admin-kicker">관리자 전용</p>
         <h2>관리자 로그인</h2>
-        <p class="muted">학교 지정 관리자만 접근할 수 있습니다.</p>
+        <p class="muted" id="adminLoginIntro">학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.</p>
         <div class="divider"></div>
         <div class="field" id="adminSchoolGate">
           <label class="field__label" for="adminSchoolPassword">학교 코드</label>
           <div class="input-wrap">
             <input type="text" id="adminSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
           </div>
-          <p class="hint">학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.</p>
         </div>
-        <div class="field">
-          <label class="field__label" for="adminPassword">관리자 암호</label>
-          <div class="input-wrap">
-            <input type="password" id="adminPassword" autocomplete="current-password" placeholder="암호 입력" />
+        <div class="submit-block" id="adminSchoolGateActions">
+          <button type="button" class="btn-primary" id="btnAdminSchoolUnlock">확인</button>
+        </div>
+        <div id="adminPasswordSection" hidden>
+          <div class="field">
+            <label class="field__label" for="adminPassword">관리자 암호</label>
+            <div class="input-wrap">
+              <input type="password" id="adminPassword" autocomplete="current-password" placeholder="암호 입력" />
+            </div>
+          </div>
+          <div class="submit-block">
+            <button type="button" class="btn-primary" id="btnAdminLogin">로그인</button>
           </div>
         </div>
-        <div class="submit-block">
-          <button type="button" class="btn-primary" id="btnAdminLogin">로그인</button>
-          <p class="submit-message" id="adminLoginMessage" role="status"></p>
-        </div>
+        <p class="submit-message" id="adminLoginMessage" role="status"></p>
       </section>
 
       <!-- 관리자 대시보드 -->
