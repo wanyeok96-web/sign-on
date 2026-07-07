@@ -89,43 +89,14 @@
     },
 
     updateHeroCurrentSchool() {
+      const modeBadge = document.getElementById("heroModeBadge");
       const wrap = document.getElementById("heroCurrentSchool");
-      const nameEl = document.getElementById("heroCurrentSchoolName");
-      if (!wrap || !nameEl) return;
-
-      const school = AppConfig.getSelectedSchoolForDisplay();
-      if (!school || !school.label) {
-        wrap.hidden = true;
-        nameEl.textContent = "";
-        return;
-      }
-
-      nameEl.textContent =
-        school.flowMode === "workshop"
-          ? school.displayTitle || school.label
-          : `🎓 ${school.label}`;
-      wrap.hidden = false;
+      if (modeBadge) modeBadge.hidden = true;
+      if (wrap) wrap.hidden = true;
     },
 
     applyFlowModeUi() {
-      const workshop = AppConfig.isWorkshopMode();
-      document.body.classList.toggle("mode-workshop", workshop);
-
-      const badge = document.getElementById("heroModeBadge");
-      const ledeMain = document.getElementById("heroLedeMain");
-      const ledeSub = document.getElementById("heroLedeSub");
-      if (badge) badge.hidden = !workshop;
-      if (ledeMain) {
-        ledeMain.textContent = workshop
-          ? "연수 일자 · 연수 선택 · 학교명 · 성함 · 서명 순서로 진행해 주세요."
-          : "온라인에서 간편하게, 연수 등록부에 서명하세요.";
-      }
-      if (ledeSub) {
-        ledeSub.textContent = workshop
-          ? "개인 연수용 서명 등록부입니다."
-          : "배움이 넘치는 연수가 되길 응원합니다!";
-      }
-
+      document.body.classList.toggle("mode-workshop", AppConfig.isWorkshopMode());
       AppConfig.updateHeroCurrentSchool();
       if (typeof StaffApp !== "undefined" && StaffApp._schoolFlowStarted) {
         StaffApp.refreshStaffSteps();
