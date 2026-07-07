@@ -589,7 +589,13 @@
 
     onWorkshopInput() {
       StaffApp.syncWorkshopState();
+      StaffApp._suppressWorkshopScroll = true;
       StaffApp.refreshStaffSteps();
+      StaffApp._suppressWorkshopScroll = false;
+      const step5 = document.getElementById("staffStep5");
+      if (step5 && !step5.hidden) {
+        SignaturePad.ensureReady();
+      }
       StaffApp.validateSubmitButton();
     },
 
@@ -1106,18 +1112,15 @@
         }
       });
 
-      if (lastVisible === 5 && completed[1] && completed[2] && completed[3] && completed[4] && stepRevealed) {
+      if (lastVisible === 5 && completed[4] && stepRevealed && !StaffApp._suppressWorkshopScroll) {
         SignaturePad.ensureReady();
-      } else if (stepRevealed && lastVisible < 5) {
-        const targetId = StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1];
+      } else if (
+        stepRevealed &&
+        lastVisible === 3 &&
+        !StaffApp._suppressWorkshopScroll
+      ) {
         requestAnimationFrame(() => {
-          const card = document.getElementById(targetId);
-          card?.scrollIntoView({ behavior: "smooth", block: "start" });
-          if (lastVisible === 3) {
-            document.getElementById("staffFreeSchool")?.focus();
-          } else if (lastVisible === 4) {
-            document.getElementById("staffFreeName")?.focus();
-          }
+          document.getElementById("staffWsStep1")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
         });
       }
     },
