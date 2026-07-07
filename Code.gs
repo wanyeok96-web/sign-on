@@ -21,12 +21,12 @@ const SHEET_BASE_SIGS = "서명기록";
 const WORKSHOP_SUFFIX = "지리연수";
 const WORKSHOP_EVENT_ID = "ev_workshop_main";
 const WORKSHOP_EVENT_TITLE = "바이브 코딩을 활용한 지리교사 역량강화";
+const TRAINING_DEFAULT_POSITION = "교사";
 
 function isWorkshopSuffix_(schoolSuffix) {
   return String(schoolSuffix) === WORKSHOP_SUFFIX;
 }
 
-/** 등록부 출력용: 중학교→중, 고등학교→고 */
 function normalizeSchoolName_(raw) {
   var s = String(raw || "")
     .trim()
@@ -35,6 +35,12 @@ function normalizeSchoolName_(raw) {
   s = s.replace(/중학교$/g, "중");
   s = s.replace(/고등학교$/g, "고");
   return s;
+}
+
+/** 연수등록부(연수코드) 직위 기본값 */
+function trainingRegisterPosition_(position) {
+  const p = String(position || "").trim();
+  return p || TRAINING_DEFAULT_POSITION;
 }
 
 function ensureWorkshopEvent_(schoolSuffix) {
@@ -423,6 +429,7 @@ function normalizeEvent_(r) {
 function createEvent_(p, schoolSuffix) {
   const eventId = "ev_" + Utilities.getUuid().replace(/-/g, "").slice(0, 12);
   const active = p.status === "진행중" ? "Y" : "Y";
+  const target = resolveEventTarget_(p, schoolSuffix);
   appendRow_(getSheetEvents_(schoolSuffix), {
     eventId: eventId,
     title: p.title,
@@ -430,8 +437,8 @@ function createEvent_(p, schoolSuffix) {
     location: p.location || "",
     description: p.description || "",
     status: p.status || "진행중",
-    targetType: p.targetType || "all",
-    targetData: p.targetData || "",
+    targetType: target.targetType,
+    targetData: target.targetData,
     active: active,
   });
   return { eventId: eventId };
@@ -439,18 +446,48 @@ function createEvent_(p, schoolSuffix) {
 
 function updateEvent_(p, schoolSuffix) {
   if (!p.eventId) throw new Error("eventId가 필요합니다.");
+  const target = resolveEventTarget_(p, schoolSuffix);
   const updated = updateRowById_(getSheetEvents_(schoolSuffix), "eventId", p.eventId, {
     title: p.title,
     date: p.date,
     location: p.location || "",
     description: p.description || "",
     status: p.status,
-    targetType: p.targetType || "all",
-    targetData: p.targetData || "",
+    targetType: target.targetType,
+    targetData: target.targetData,
     active: p.status === "보관" ? "N" : "Y",
   });
   if (!updated) throw new Error("연수를 찾을 수 없습니다.");
   return { eventId: p.eventId };
+}
+
+function resolveEventTarget_(p, schoolSuffix) {
+  if (isWorkshopSuffix_(schoolSuffix)) {
+    return { targetType: "open", targetData: "" };
+  }
+  return {
+    targetType: p.targetType || "all",
+    targetData: p.targetData || "",
+  };
+}
+
+function isOpenEventMode_(schoolSuffix, ev) {
+  return isWorkshopSuffix_(schoolSuffix) || (ev && String(ev.targetType) === "open");
+}
+
+function staffMatchesSig_(staff, sig) {
+  const sid = String(staff.staffId || "").trim();
+  const sigSid = String(sig.staffId || "").trim();
+  if (sid && sigSid && sid === sigSid) return true;
+
+  const name = String(staff.name || "").trim();
+  const sigName = String(sig.name || "").trim();
+  if (!name || !sigName || name !== sigName) return false;
+
+  const dept = String(staff.department || "").trim();
+  const sigDept = String(sig.department || "").trim();
+  if (dept === sigDept) return true;
+  return normalizeSchoolName_(dept) === normalizeSchoolName_(sigDept);
 }
 
 function deleteEvent_(eventId, schoolSuffix) {
@@ -513,7 +550,9 @@ function getStaffForEvent_(eventId, schoolSuffix) {
   const type = ev.targetType || "all";
   const data = (ev.targetData || "").trim();
 
-  if (type === "departments" && data) {
+  if (type === "open") {
+    return staff;
+  } else if (type === "departments" && data) {
     const deptSet = {};
     data.split(",").forEach(function (s) {
       const v = String(s || "").trim();
@@ -788,7 +827,7 @@ function submitSignature_(payload, schoolSuffix) {
     eventTitle: ev.title,
     department: payload.department,
     name: payload.name,
-    position: payload.position || "",
+    position: workshop ? trainingRegisterPosition_(payload.position) : payload.position || "",
     signatureData: payload.signatureData,
     userAgent: "",
     staffId: payloadStaffId,
@@ -810,8 +849,56 @@ function submitSignature_(payload, schoolSuffix) {
 }
 
 function getSignatureStatus_(eventId, schoolSuffix) {
-  const targets = getStaffForEvent_(eventId, schoolSuffix);
+  const ev = getEventById_(eventId, schoolSuffix);
+  if (!ev) throw new Error("연수를 찾을 수 없습니다.");
+
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
+
+  if (isOpenEventMode_(schoolSuffix, ev)) {
+    const targets = getStaffList_(false, schoolSuffix);
+    const signed = sigs
+      .map(function (rec) {
+        return {
+          staffId: String(rec.staffId || "").trim(),
+          department: rec.department,
+          name: rec.name,
+          timestamp: String(rec.timestamp || ""),
+          signatureData: String(rec.signatureData || ""),
+        };
+      })
+      .sort(function (a, b) {
+        const da = String(a.department || "");
+        const db = String(b.department || "");
+        if (da !== db) return da.localeCompare(db, "ko");
+        return String(a.name || "").localeCompare(String(b.name || ""), "ko");
+      });
+
+    const unsigned = [];
+    targets.forEach(function (t) {
+      const matched = sigs.some(function (s) {
+        return staffMatchesSig_(t, s);
+      });
+      if (!matched) {
+        unsigned.push({
+          department: t.department,
+          name: t.name,
+          position: t.position,
+        });
+      }
+    });
+
+    const rosterCount = targets.length;
+    return {
+      total: rosterCount > 0 ? rosterCount : signed.length,
+      signedCount: signed.length,
+      unsignedCount: unsigned.length,
+      signed: signed,
+      unsigned: unsigned,
+      openMode: true,
+    };
+  }
+
+  const targets = getStaffForEvent_(eventId, schoolSuffix);
 
   const signedMap = {};
   sigs.forEach((s) => {
@@ -899,8 +986,58 @@ function getPrintableRegister_(eventId, schoolSuffix) {
   const ev = getEventById_(eventId, schoolSuffix);
   if (!ev) throw new Error("연수를 찾을 수 없습니다.");
 
-  const targets = getStaffForEvent_(eventId, schoolSuffix);
   const sigs = readSheetObjects_(getSheetSigs_(schoolSuffix)).filter((s) => String(s.eventId) === String(eventId));
+
+  if (isOpenEventMode_(schoolSuffix, ev)) {
+    const targets = getStaffList_(false, schoolSuffix);
+    const usedSigIdx = {};
+    const rows = [];
+
+    targets.forEach(function (t) {
+      let rec = null;
+      for (let i = 0; i < sigs.length; i++) {
+        if (usedSigIdx[i]) continue;
+        if (staffMatchesSig_(t, sigs[i])) {
+          rec = sigs[i];
+          usedSigIdx[i] = true;
+          break;
+        }
+      }
+      rows.push({
+        department: t.department,
+        name: t.name,
+        position: trainingRegisterPosition_(rec ? rec.position : t.position),
+        staffRank: t.staffRank || "",
+        remarks: t.remarks || "",
+        signatureData: rec ? String(rec.signatureData || "") : "",
+        timestamp: rec ? String(rec.timestamp || "") : "",
+      });
+    });
+
+    sigs.forEach(function (s, i) {
+      if (usedSigIdx[i]) return;
+      rows.push({
+        department: s.department,
+        name: s.name,
+        position: trainingRegisterPosition_(s.position),
+        staffRank: "",
+        remarks: "",
+        signatureData: String(s.signatureData || ""),
+        timestamp: String(s.timestamp || ""),
+      });
+    });
+
+    return {
+      title: ev.title,
+      date: ev.date,
+      location: ev.location,
+      description: ev.description,
+      rows: rows,
+      openMode: true,
+    };
+  }
+
+  const targets = getStaffForEvent_(eventId, schoolSuffix);
   const sigByStaff = {};
   sigs.forEach((s) => {
     const sid = String(s.staffId || "").trim();

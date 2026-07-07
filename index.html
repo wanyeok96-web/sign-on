@@ -80,13 +80,13 @@
         <!-- 학교 코드 -->
         <section class="form-card form-card--solo staff-school-card" id="staffSchoolGate">
           <p class="kicker">학교 선택</p>
-          <h2>학교 코드</h2>
-          <p class="muted">학교 코드에 따라 일반 학교 연수 또는 <strong>연수용 등록부(geo1234)</strong>로 이동합니다.</p>
+          <h2>학교 코드 / 연수 코드</h2>
+          <p class="muted">학교 코드(이솔고·하길고) 또는 연수 코드(geo1234)를 입력하면 해당 등록부로 이동합니다.</p>
           <div class="divider"></div>
           <div class="field">
-            <label class="field__label" for="staffSchoolPassword">학교 코드</label>
+            <label class="field__label" for="staffSchoolPassword">학교 코드 / 연수 코드</label>
             <div class="input-wrap">
-              <input type="text" id="staffSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+              <input type="text" id="staffSchoolPassword" autocomplete="off" placeholder="학교 코드 또는 연수 코드" />
             </div>
           </div>
           <div class="submit-block">
@@ -95,46 +95,8 @@
           </div>
         </section>
 
-        <!-- 워크숍(geo1234): STEP 3 학교명 -->
-        <section class="form-card" id="staffWsStep1" data-step="3" data-flow="workshop" hidden>
-          <div class="form-card__head">
-            <div>
-              <p class="kicker">STEP 3</p>
-              <h2>학교명 입력</h2>
-              <p class="muted">소속 학교명을 입력해 주세요. (예: OO중, OO중학교)</p>
-            </div>
-            <span class="step-badge">3</span>
-          </div>
-          <div class="divider"></div>
-          <div class="field">
-            <label class="field__label" for="staffFreeSchool">학교명</label>
-            <div class="input-wrap">
-              <input type="text" id="staffFreeSchool" placeholder="예: 수원중학교" autocomplete="organization" />
-            </div>
-            <p class="hint" id="staffFreeSchoolHint"></p>
-          </div>
-        </section>
-
-        <!-- 워크숍(geo1234): STEP 4 성함 -->
-        <section class="form-card" id="staffWsStep2" data-step="4" data-flow="workshop" hidden>
-          <div class="form-card__head">
-            <div>
-              <p class="kicker">STEP 4</p>
-              <h2>성함 입력</h2>
-            </div>
-            <span class="step-badge">4</span>
-          </div>
-          <div class="divider"></div>
-          <div class="field">
-            <label class="field__label" for="staffFreeName">성함</label>
-            <div class="input-wrap">
-              <input type="text" id="staffFreeName" placeholder="실명 입력" autocomplete="name" />
-            </div>
-          </div>
-        </section>
-
         <!-- STEP 1: 연수 일자 -->
-        <section class="form-card" id="staffStep1" data-step="1" data-flow="school" hidden>
+        <section class="form-card" id="staffStep1" data-step="1" data-flow="shared" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 1</p>
@@ -156,7 +118,7 @@
         </section>
 
         <!-- STEP 2: 연수/회의 다중 선택 -->
-        <section class="form-card" id="staffStep2" data-step="2" data-flow="school" hidden>
+        <section class="form-card" id="staffStep2" data-step="2" data-flow="shared" hidden>
           <div class="form-card__head">
             <div>
               <p class="kicker">STEP 2</p>
@@ -184,7 +146,46 @@
           </div>
         </section>
 
-        <!-- STEP 3: 부서 -->
+        <!-- 연수코드: STEP 3 학교명 -->
+        <section class="form-card" id="staffWsStep1" data-step="3" data-flow="workshop" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 3</p>
+              <h2>학교명 입력</h2>
+              <p class="muted">소속 학교명을 자유롭게 입력해 주세요. (예: OO중, OO중학교)</p>
+            </div>
+            <span class="step-badge">3</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffFreeSchool">학교명</label>
+            <div class="input-wrap">
+              <input type="text" id="staffFreeSchool" placeholder="예: 수원중학교" autocomplete="organization" />
+            </div>
+            <p class="hint" id="staffFreeSchoolHint"></p>
+          </div>
+        </section>
+
+        <!-- 연수코드: STEP 4 성함 -->
+        <section class="form-card" id="staffWsStep2" data-step="4" data-flow="workshop" hidden>
+          <div class="form-card__head">
+            <div>
+              <p class="kicker">STEP 4</p>
+              <h2>성함 입력</h2>
+              <p class="muted">성함을 자유롭게 입력해 주세요. 구성원 명단 등록 여부와 관계없이 서명할 수 있습니다.</p>
+            </div>
+            <span class="step-badge">4</span>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label class="field__label" for="staffFreeName">성함</label>
+            <div class="input-wrap">
+              <input type="text" id="staffFreeName" placeholder="실명 입력" autocomplete="name" />
+            </div>
+          </div>
+        </section>
+
+        <!-- 학교코드: STEP 3 부서 -->
         <section class="form-card" id="staffStep3" data-step="3" data-flow="school" hidden>
           <div class="form-card__head">
             <div>
@@ -260,27 +261,23 @@
       <section class="form-card form-card--solo admin-login-card" id="adminLoginCard">
         <p class="kicker admin-kicker">관리자 전용</p>
         <h2>관리자 로그인</h2>
-        <p class="muted" id="adminLoginIntro">학교 코드에 따라 해당 학교의 관리자 화면이 열립니다.</p>
+        <p class="muted" id="adminLoginIntro">학교 코드 또는 연수 코드와 관리자 암호를 입력해 주세요.</p>
         <div class="divider"></div>
-        <div class="field" id="adminSchoolGate">
-          <label class="field__label" for="adminSchoolPassword">학교 코드</label>
+        <div class="field">
+          <label class="field__label" for="adminAccessCode">학교 코드 / 연수 코드</label>
           <div class="input-wrap">
-            <input type="text" id="adminSchoolPassword" autocomplete="off" placeholder="학교 코드 입력" />
+            <input type="text" id="adminAccessCode" autocomplete="off" placeholder="예: isolgo, hagilgo, geo1234" />
+          </div>
+          <p class="hint">학교 코드 — 이솔고·하길고 등 / 연수 코드 — geo1234 등 개인·집합 연수</p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="adminPassword">관리자 암호</label>
+          <div class="input-wrap">
+            <input type="password" id="adminPassword" autocomplete="current-password" placeholder="암호 입력" />
           </div>
         </div>
-        <div class="submit-block" id="adminSchoolGateActions">
-          <button type="button" class="btn-primary" id="btnAdminSchoolUnlock">확인</button>
-        </div>
-        <div id="adminPasswordSection" hidden>
-          <div class="field">
-            <label class="field__label" for="adminPassword">관리자 암호</label>
-            <div class="input-wrap">
-              <input type="password" id="adminPassword" autocomplete="current-password" placeholder="암호 입력" />
-            </div>
-          </div>
-          <div class="submit-block">
-            <button type="button" class="btn-primary" id="btnAdminLogin">로그인</button>
-          </div>
+        <div class="submit-block">
+          <button type="button" class="btn-primary" id="btnAdminLogin">로그인</button>
         </div>
         <p class="submit-message" id="adminLoginMessage" role="status"></p>
       </section>

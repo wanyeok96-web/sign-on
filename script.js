@@ -70,7 +70,7 @@
       if (AppConfig.hasSchoolGate()) {
         const school = AppConfig.getSchoolById(AppConfig.activeSchoolId);
         if (!school || !school.sheetSuffix) {
-          throw new Error("학교 코드를 먼저 입력해 주세요.");
+          throw new Error("학교 코드 또는 연수 코드를 먼저 입력해 주세요.");
         }
         return school.sheetSuffix;
       }
@@ -127,11 +127,19 @@
       }
 
       AppConfig.updateHeroCurrentSchool();
+      if (typeof StaffApp !== "undefined" && StaffApp._schoolFlowStarted) {
+        StaffApp.refreshStaffSteps();
+      }
     },
 
     isWorkshopMode(school) {
       const s = school || AppConfig.getSchoolById(AppConfig.activeSchoolId);
-      return !!(s && s.flowMode === "workshop");
+      if (!s) return false;
+      return s.flowMode === "workshop" || s.codeType === "training";
+    },
+
+    isTrainingCode(school) {
+      return AppConfig.isWorkshopMode(school);
     },
   };
 
@@ -497,7 +505,7 @@
         StaffApp.hideAllStaffSteps();
         UI.setMessage(msgEl, "");
         if (dateSel) {
-          dateSel.innerHTML = '<option value="">학교 코드를 먼저 입력해 주세요</option>';
+          dateSel.innerHTML = '<option value="">코드를 먼저 입력해 주세요</option>';
           dateSel.disabled = true;
         }
         StaffApp.renderEventChecklist([]);
@@ -631,7 +639,7 @@
 
       StaffApp.state.department = schoolNorm;
       StaffApp.state.name = name;
-      StaffApp.state.position = "";
+      StaffApp.state.position = "교사";
       StaffApp.state.staffKey = schoolNorm && name ? `${schoolNorm}|${name}` : "";
       StaffApp.state.staffId =
         schoolNorm && name ? `ws_${schoolNorm}|${name}` : "";
@@ -645,7 +653,7 @@
       const school = AppConfig.setSchoolByPassword(pw);
 
       if (!school) {
-        UI.setMessage(msgEl, "학교 코드가 올바르지 않습니다.", true);
+        UI.setMessage(msgEl, "학교 코드 또는 연수 코드가 올바르지 않습니다.", true);
         return;
       }
 
@@ -656,14 +664,15 @@
       try {
         StaffApp.resetStaffFormState();
 
-        await StaffApp.loadEvents();
-
         StaffApp._schoolFlowStarted = true;
         if (gateCard) gateCard.hidden = true;
+
+        await StaffApp.loadEvents();
 
         StaffApp.setStaffStepsLocked(false);
         StaffApp.validateSubmitButton();
         AppConfig.applyFlowModeUi();
+        StaffApp.refreshStaffSteps();
 
         if (AppConfig.isWorkshopMode(school)) {
           UI.toastMsg("연수용 서명 등록부로 전환되었습니다.");
@@ -889,6 +898,19 @@
             dayEvents.length === 1
               ? "이 날짜에 연수 1건 · 서명할 연수를 직접 체크해 주세요"
               : `이 날짜에 연수 ${dayEvents.length}건 · 서명할 항목을 직접 체크하세요`;
+        }
+        if (AppConfig.isWorkshopMode()) {
+          const openEvents = dayEvents.filter((ev) => ev.status !== "마감");
+          if (openEvents.length === 1) {
+            requestAnimationFrame(() => {
+              const list = document.getElementById("staffEventChecklist");
+              const cb = list?.querySelector(`input[type="checkbox"][value="${openEvents[0].eventId}"]`);
+              if (cb && !cb.checked) {
+                cb.checked = true;
+                StaffApp.onEventChecklistChange();
+              }
+            });
+          }
         }
       }
 
@@ -1116,8 +1138,16 @@
       if (lastVisible === 5 && completed[1] && completed[2] && completed[3] && completed[4] && stepRevealed) {
         SignaturePad.ensureReady();
       } else if (stepRevealed && lastVisible < 5) {
-        const card = document.getElementById(StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1]);
-        card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        const targetId = StaffApp.WORKSHOP_STEP_IDS[lastVisible - 1];
+        requestAnimationFrame(() => {
+          const card = document.getElementById(targetId);
+          card?.scrollIntoView({ behavior: "smooth", block: "start" });
+          if (lastVisible === 3) {
+            document.getElementById("staffFreeSchool")?.focus();
+          } else if (lastVisible === 4) {
+            document.getElementById("staffFreeName")?.focus();
+          }
+        });
       }
     },
 
@@ -1355,6 +1385,10 @@
       const wsHint = document.getElementById("adminWorkshopStatusHint");
       if (wsHint) wsHint.hidden = true;
 
+      document.querySelectorAll(".dept-picker-field").forEach((el) => {
+        el.hidden = workshop;
+      });
+
       const deptHeaders = document.querySelectorAll(
         "#adminSignedCard thead th:first-child, #adminUnsignedCard thead th:first-child"
       );
@@ -1365,13 +1399,12 @@
 
     init() {
       document.getElementById("btnAdminLogin")?.addEventListener("click", AdminApp.login);
-      document.getElementById("btnAdminSchoolUnlock")?.addEventListener("click", AdminApp.unlockSchool);
       document.getElementById("btnAdminLogout")?.addEventListener("click", AdminApp.logout);
       document.getElementById("adminPassword")?.addEventListener("keydown", (e) => {
         if (e.key === "Enter") AdminApp.login();
       });
-      document.getElementById("adminSchoolPassword")?.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") AdminApp.unlockSchool();
+      document.getElementById("adminAccessCode")?.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") AdminApp.login();
       });
 
       document.querySelectorAll(".admin-menu__item").forEach((btn) => {
@@ -1426,71 +1459,40 @@
       document.getElementById("btnPrintRegister")?.addEventListener("click", () => window.print());
 
       if (Api.getAdminToken()) AdminApp.showDashboard();
-      AdminApp.applySchoolGateState();
-    },
-
-    applySchoolGateState() {
-      const gate = document.getElementById("adminSchoolGate");
-      const gateActions = document.getElementById("adminSchoolGateActions");
-      const passwordSection = document.getElementById("adminPasswordSection");
-      if (!gate) return;
-      if (!AppConfig.hasSchoolGate()) {
-        gate.hidden = true;
-        if (gateActions) gateActions.hidden = true;
-        if (passwordSection) passwordSection.hidden = false;
-        return;
-      }
-      const unlocked = !!AppConfig.activeSchoolId;
-      gate.hidden = unlocked;
-      if (gateActions) gateActions.hidden = unlocked;
-      if (passwordSection) passwordSection.hidden = !unlocked;
-    },
-
-    async unlockSchool() {
-      const msgEl = document.getElementById("adminLoginMessage");
-      const schoolPw = document.getElementById("adminSchoolPassword")?.value || "";
-      const school = AppConfig.setSchoolByPassword(schoolPw);
-      if (!school) {
-        UI.setMessage(msgEl, "학교 코드가 올바르지 않습니다.", true);
-        return;
-      }
-      Api.setAdminToken("");
-      UI.setMessage(msgEl, "");
-      AdminApp.applySchoolGateState();
-      AppConfig.applyFlowModeUi();
-      AdminApp.applyWorkshopAdminLayout();
-      if (AppConfig.isWorkshopMode(school)) {
-        UI.toastMsg("연수용 관리자 화면입니다.");
-      }
-      document.getElementById("adminPassword")?.focus();
     },
 
     async login() {
-      if (AppConfig.hasSchoolGate() && !AppConfig.activeSchoolId) {
-        UI.setMessage(
-          document.getElementById("adminLoginMessage"),
-          "먼저 학교 코드를 확인해 주세요.",
-          true
-        );
+      const code = document.getElementById("adminAccessCode")?.value || "";
+      const pw = document.getElementById("adminPassword")?.value || "";
+      const msgEl = document.getElementById("adminLoginMessage");
+
+      if (!code.trim()) {
+        UI.setMessage(msgEl, "학교 코드 또는 연수 코드를 입력해 주세요.", true);
+        return;
+      }
+      if (!pw) {
+        UI.setMessage(msgEl, "관리자 암호를 입력해 주세요.", true);
         return;
       }
 
-      const pw = document.getElementById("adminPassword").value;
-      const msgEl = document.getElementById("adminLoginMessage");
-      if (!pw) {
-        UI.setMessage(msgEl, "암호를 입력해 주세요.", true);
+      const school = AppConfig.setSchoolByPassword(code);
+      if (!school) {
+        UI.setMessage(msgEl, "학교 코드 또는 연수 코드가 올바르지 않습니다.", true);
         return;
       }
+
       try {
         const data = await UI.withLoading(
           () => Api.call("loginAdmin", { password: pw }),
-          "확인 중…"
+          "로그인 중…"
         );
         Api.setAdminToken(data.token);
         UI.setMessage(msgEl, "");
+        AdminApp.applyWorkshopAdminLayout();
         AdminApp.showDashboard();
         AppConfig.applyFlowModeUi();
       } catch (err) {
+        Api.setAdminToken("");
         UI.setMessage(msgEl, err.message, true);
       }
     },
@@ -1500,10 +1502,9 @@
       document.getElementById("adminLoginCard").hidden = false;
       document.getElementById("adminDashboard").hidden = true;
       document.getElementById("adminPassword").value = "";
-      const schoolPwEl = document.getElementById("adminSchoolPassword");
-      if (schoolPwEl) schoolPwEl.value = "";
+      const codeEl = document.getElementById("adminAccessCode");
+      if (codeEl) codeEl.value = "";
       AppConfig.setActiveSchoolId("");
-      AdminApp.applySchoolGateState();
       AppConfig.applyFlowModeUi();
       AdminApp.applyWorkshopAdminLayout();
     },
@@ -1638,7 +1639,15 @@
       return { ok: true, targetType: "departments", targetData: checked.join(",") };
     },
 
+    getEventTargetPayload(listElId) {
+      if (AdminApp.isWorkshopAdmin()) {
+        return { ok: true, targetType: "open", targetData: "" };
+      }
+      return AdminApp.getTargetFromDeptPicker(listElId);
+    },
+
     refreshCreateDeptPicker() {
+      if (AdminApp.isWorkshopAdmin()) return;
       const listEl = document.getElementById("adminEventDeptList");
       if (!listEl) return;
       const current = AdminApp.getTargetFromDeptPicker("adminEventDeptList");
@@ -1737,7 +1746,7 @@
     },
 
     getEventModalPayload() {
-      const target = AdminApp.getTargetFromDeptPicker("modalEventDeptList");
+      const target = AdminApp.getEventTargetPayload("modalEventDeptList");
       return {
         eventId: document.getElementById("modalEventId").value,
         title: document.getElementById("modalEventTitle").value.trim(),
@@ -1830,7 +1839,7 @@
     async saveEvent(e) {
       e.preventDefault();
       const msgEl = document.getElementById("adminEventMessage");
-      const target = AdminApp.getTargetFromDeptPicker("adminEventDeptList");
+      const target = AdminApp.getEventTargetPayload("adminEventDeptList");
       if (!target.ok) {
         UI.setMessage(msgEl, target.message, true);
         return;
@@ -2343,10 +2352,13 @@
         return "<td></td><td></td><td></td><td></td><td></td><td></td>";
       }
       const sigHtml = safeSignatureImg(row.signatureData);
+      const position = AdminApp.isWorkshopAdmin()
+        ? String(row.position || "").trim() || "교사"
+        : row.position || "";
       return `
         <td>${num}</td>
         <td>${escapeHtml(row.department || "")}</td>
-        <td>${escapeHtml(row.position || "")}</td>
+        <td>${escapeHtml(position)}</td>
         <td>${escapeHtml(row.name || "")}</td>
         <td class="print-sig-cell">${sigHtml}</td>
         <td></td>
@@ -2377,7 +2389,6 @@
     adminPanel.hidden = nextView !== "admin";
 
     if (nextView === "admin" && typeof AdminApp !== "undefined") {
-      AdminApp.applySchoolGateState();
       if (Api.getAdminToken()) AdminApp.applyWorkshopAdminLayout();
     }
 

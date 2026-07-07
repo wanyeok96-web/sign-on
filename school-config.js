@@ -9,7 +9,7 @@ window.SCHOOL_CONFIG = {
    * 학교 추가 시 URL을 새로 만들 필요 없음 — sheetSuffix로 탭만 구분
    */
   gasWebAppUrl:
-    "https://script.google.com/macros/s/AKfycby2M2yHOqvEcS0tGldePV8MbnCQ9gajsy4uCIhufxVyiLBfPtDmnreCVEnGZ6GWavPT/exec",
+    "https://script.google.com/macros/s/AKfycbw0_VJP-GxiEI2tK6tgxxFjL2V-mNxlq33K5hxP3D-tC9Rxe9t-InACJTVXbBDwmpxi/exec",
 
   schools: [
     {
@@ -17,6 +17,7 @@ window.SCHOOL_CONFIG = {
       label: "이솔고등학교",
       sheetSuffix: "이솔고",
       password: "isolgo",
+      codeType: "school",
       flowMode: "school",
     },
     {
@@ -24,6 +25,7 @@ window.SCHOOL_CONFIG = {
       label: "하길고등학교",
       sheetSuffix: "하길고",
       password: "hagilgo",
+      codeType: "school",
       flowMode: "school",
     },
     {
@@ -32,6 +34,7 @@ window.SCHOOL_CONFIG = {
       displayTitle: "바이브 코딩을 활용한 지리교사 역량강화",
       sheetSuffix: "지리연수",
       password: "geo1234",
+      codeType: "training",
       flowMode: "workshop",
     },
   ],
